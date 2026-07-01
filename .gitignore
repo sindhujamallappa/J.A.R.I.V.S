@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+
+# Local model files (downloaded on setup) and runtime logs
+models/*
+!models/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

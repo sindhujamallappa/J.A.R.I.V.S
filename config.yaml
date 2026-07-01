@@ -1,0 +1,83 @@
+# J.A.R.I.V.S configuration — single source of truth.
+# Loaded and validated by src/jarvis/config.py into typed objects.
+# A few keys can be overridden via environment variables (see .env.example).
+
+app:
+  name: "J.A.R.I.V.S"
+
+logging:
+  level: "INFO"            # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  format: "text"           # text | json
+  file: "logs/jarvis.log"  # null to disable file logging (console only)
+  max_bytes: 5242880       # rotate at 5 MB
+  backup_count: 3
+
+audio:
+  sample_rate: 16000       # required by openWakeWord AND faster-whisper — leave at 16k
+  frame_length: 1280       # 80 ms @ 16 kHz — openWakeWord's expected chunk size
+  channels: 1              # mono
+  input_device: null       # null = system default; int index or name substring to pin a mic
+
+wake_word:
+  model: "hey_jarvis"            # bundled openWakeWord model name, OR a path to a custom .onnx/.tflite
+  threshold: 0.5                 # detection score in [0,1] to trigger; raise to cut false positives
+  inference_framework: "onnx"    # onnx | tflite  (onnx installs cleanly on Windows)
+  vad_threshold: 0.0             # silero VAD gate in [0,1]; 0 disables. e.g. 0.5 to require speech
+  enable_noise_suppression: false  # speex; needs the speexdsp-ns extra (awkward on Windows)
+  trigger_cooldown_sec: 2.0      # ignore re-triggers within this window after a detection
+  models_dir: "models"           # where downloaded/custom wake-word models live
+
+safety:
+  confirm_unknown_actions: true    # treat unrecognised actions as needing confirmation (fail-safe)
+  confirmation_retries: 2          # re-prompts on an unclear yes/no before defaulting to DENY
+  confirmation_prompt: "This will {action}. Should I proceed? Say yes or no."
+  reprompt: "Sorry, I didn't catch a yes or no. Please say yes or no."
+  extra_destructive_actions: []    # extra action names to always treat as destructive
+  # affirmatives / negatives use sensible built-in defaults; override with lists if needed.
+
+execution:
+  apps: {}                         # friendly name -> executable/path, e.g. {notes: notepad.exe}
+  allow_run_command: false         # arbitrary shell exec (gated + logged); OFF by default
+  delete_to_trash: true            # delete_file -> Recycle Bin instead of permanent removal
+  search_url: "https://www.google.com/search?q={query}"
+  read_file_max_chars: 2000        # cap on read_file spoken/returned output
+
+# --- stages below are scaffolded now, wired in later roadmap steps ---
+
+stt:
+  model_size: "base"       # faster-whisper: tiny | base | small | medium | large-v3
+  device: "cpu"            # cpu | cuda
+  compute_type: "int8"     # int8 | int8_float16 | float16 | float32
+  language: "en"           # "" to autodetect
+  beam_size: 1             # 1 = greedy (fastest); raise for accuracy
+  # utterance capture / silence endpointing (int16 RMS domain)
+  min_rms_threshold: 300   # noise-floor guard for speech onset
+  speech_multiplier: 2.5   # onset threshold = max(min_rms, ambient * this)
+  calibration_sec: 0.3     # ambient-noise sampling window at capture start
+  silence_duration_sec: 0.8  # trailing silence that ends the utterance
+  max_duration_sec: 15.0   # hard cap on a single command
+  onset_timeout_sec: 4.0   # give up if no speech starts after the wake word
+  preroll_sec: 0.3         # audio retained from just before onset
+
+intent:
+  provider: "ollama"
+  model: "llama3.1"        # any Ollama model — e.g. "mistral"; swap freely
+  host: "http://localhost:11434"
+  timeout_sec: 30
+  temperature: 0.0         # keep low/0 for deterministic JSON
+
+tts:
+  engine: "piper"
+  voice: "en_US-lessac-medium"   # voice name (models_dir/<voice>.onnx) or a .onnx path
+  models_dir: "models/piper"
+  speaking_rate: 1.0             # >1 faster, <1 slower
+  speaker_id: 0                  # for multi-speaker voices
+  volume: 1.0
+
+service:
+  task_name: "JARVIS Voice Assistant"   # Windows Task Scheduler task name
+  restart_on_crash: true                # app-level supervisor restarts on crash
+  restart_backoff_sec: 5.0              # initial restart delay
+  restart_backoff_max_sec: 60.0         # cap on exponential backoff
+  single_instance: true                 # refuse to start if already running
+  run_hidden: true                      # launch via pythonw.exe (no console window)
