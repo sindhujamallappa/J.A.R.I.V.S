@@ -79,14 +79,23 @@ class UtteranceCapturer:
         # 2) Wait for speech onset, keeping a preroll ring buffer.
         preroll: deque[np.ndarray] = deque(calib, maxlen=self._frames_for(cfg.preroll_sec))
         onset: Optional[np.ndarray] = None
+        peak = 0.0
         for _ in range(self._frames_for(cfg.onset_timeout_sec)):
             frame = mic.read()
-            if _rms(frame) >= threshold:
+            rms = _rms(frame)
+            peak = max(peak, rms)
+            if rms >= threshold:
                 onset = frame
                 break
             preroll.append(frame)
         if onset is None:
-            log.info("No speech within %.1fs — abandoning capture", cfg.onset_timeout_sec)
+            # Peak vs. threshold makes "mic too quiet" vs. "user silent"
+            # distinguishable straight from the log.
+            log.info(
+                "No speech within %.1fs — abandoning capture "
+                "(peak rms %.0f, onset needs >= %.0f; ambient %.0f)",
+                cfg.onset_timeout_sec, peak, threshold, ambient,
+            )
             return None
 
         # 3) Record until trailing silence or the hard duration cap.

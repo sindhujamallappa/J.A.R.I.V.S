@@ -98,7 +98,7 @@ class STTConfig:
     language: str = "en"          # "" for autodetect
     beam_size: int = 1
     # --- utterance capture / silence endpointing (int16 RMS domain) ---
-    min_rms_threshold: float = 300.0    # noise-floor guard for onset
+    min_rms_threshold: float = 100.0    # noise-floor guard for onset
     speech_multiplier: float = 2.5      # onset = max(min_rms, ambient * this)
     calibration_sec: float = 0.3        # ambient-noise sampling window
     silence_duration_sec: float = 0.8   # trailing silence that ends capture

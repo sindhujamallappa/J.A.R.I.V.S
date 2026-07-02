@@ -51,7 +51,7 @@ stt:
   language: "en"           # "" to autodetect
   beam_size: 1             # 1 = greedy (fastest); raise for accuracy
   # utterance capture / silence endpointing (int16 RMS domain)
-  min_rms_threshold: 300   # noise-floor guard for speech onset
+  min_rms_threshold: 100   # noise-floor guard for speech onset (this laptop's mic array is quiet: ambient ~26)
   speech_multiplier: 2.5   # onset threshold = max(min_rms, ambient * this)
   calibration_sec: 0.3     # ambient-noise sampling window at capture start
   silence_duration_sec: 0.8  # trailing silence that ends the utterance
