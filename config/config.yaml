@@ -58,6 +58,7 @@ stt:
   max_duration_sec: 15.0   # hard cap on a single command
   onset_timeout_sec: 4.0   # give up if no speech starts after the wake word
   preroll_sec: 0.3         # audio retained from just before onset
+  models_dir: "models/whisper"  # Whisper model files download here on first run
 
 intent:
   provider: "ollama"

@@ -105,6 +105,7 @@ class STTConfig:
     max_duration_sec: float = 15.0      # hard cap on one utterance
     onset_timeout_sec: float = 4.0      # give up if speech never starts
     preroll_sec: float = 0.3            # audio kept from before onset
+    models_dir: str = "models/whisper"  # where Whisper model files download to
 
 
 @dataclass(frozen=True)
@@ -341,6 +342,8 @@ def _validate(cfg: Config) -> None:
             raise ConfigError(f"stt.{name} must be > 0")
     if stt.preroll_sec < 0:
         raise ConfigError("stt.preroll_sec must be >= 0")
+    if not stt.models_dir.strip():
+        raise ConfigError("stt.models_dir must not be empty")
 
     tts = cfg.tts
     if not tts.engine.strip():
