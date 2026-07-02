@@ -6,22 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
-    --bg: #04070d;
-    --panel: rgba(10, 22, 34, .55);
-    --line: rgba(56, 217, 248, .22);
-    --text: #b8dbe8;
-    --dim: #557687;
-    --accent: #38d9f8;
-    --accent-soft: rgba(56, 217, 248, .35);
-    --level: 0;
-    --spin: 14s;
+    --bg: #010604;
+    --panel: rgba(3, 16, 13, .62);
+    --line: rgba(46, 230, 200, .18);
+    --text: #b6e2d8;
+    --dim: #4e7a6f;
+    --accent: #22e0bd;
+    --accent-soft: rgba(34, 224, 189, .35);
   }
-  body[data-state="transcribing"] { --accent: #8f7bff; --accent-soft: rgba(143,123,255,.35); --spin: 6s; }
-  body[data-state="thinking"]     { --accent: #ffb547; --accent-soft: rgba(255,181,71,.35);  --spin: 2.5s; }
-  body[data-state="confirming"]   { --accent: #ff4757; --accent-soft: rgba(255,71,87,.45);   --spin: 4s; }
-  body[data-state="executing"]    { --accent: #4dff9e; --accent-soft: rgba(77,255,158,.35);  --spin: 3s; }
-  body[data-state="offline"]      { --accent: #5a6b75; --accent-soft: rgba(90,107,117,.3); }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
@@ -30,50 +22,80 @@
     font-family: "Segoe UI", system-ui, sans-serif;
     overflow: hidden;
     display: flex; flex-direction: column;
-    transition: --accent .4s;
   }
-  /* ambient grid + vignette + scanlines */
+  /* ambient texture: faint dot-matrix + vignette */
   body::before {
     content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background:
-      radial-gradient(ellipse at 50% 42%, rgba(56,217,248,.07), transparent 55%),
-      repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.16) 2px 4px),
-      linear-gradient(rgba(56,217,248,.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(56,217,248,.035) 1px, transparent 1px);
-    background-size: auto, auto, 44px 44px, 44px 44px;
+      radial-gradient(ellipse at 50% 45%, rgba(34,224,189,.05), transparent 60%),
+      radial-gradient(rgba(34,224,189,.05) 1px, transparent 1.5px);
+    background-size: auto, 26px 26px;
+  }
+  body::after { /* scanlines */
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.14) 2px 4px);
   }
   main, header, footer { position: relative; z-index: 1; }
 
   /* ---------- header ---------- */
   header {
     display: flex; align-items: center; gap: 1.2rem;
-    padding: .7rem 1.4rem;
+    padding: .6rem 1.4rem;
     border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, rgba(56,217,248,.06), transparent);
+    background:
+      linear-gradient(90deg, rgba(34,224,189,.09), transparent 35%, transparent 65%, rgba(34,224,189,.07)),
+      linear-gradient(180deg, rgba(34,224,189,.05), transparent);
   }
-  .brand { font-size: 1.25rem; font-weight: 300; letter-spacing: .55em; color: var(--accent);
-           text-shadow: 0 0 14px var(--accent-soft); white-space: nowrap; }
-  .brand b { font-weight: 600; }
-  .tagline { font-size: .6rem; letter-spacing: .3em; color: var(--dim); text-transform: uppercase; }
-  .spacer { flex: 1; }
-  .readout { text-align: right; font-size: .68rem; letter-spacing: .18em; color: var(--dim); text-transform: uppercase; }
-  .readout div:first-child { font-size: 1.05rem; color: var(--text); letter-spacing: .12em; }
+  .emblem { width: 44px; height: 44px; flex: none; }
+  .emblem .r1 { transform-origin: 50% 50%; animation: spin 9s linear infinite; }
+  .emblem .r2 { transform-origin: 50% 50%; animation: spin 5s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .brand-wrap { position: relative; }
+  .brand {
+    font-size: 1.5rem; font-weight: 300; letter-spacing: .5em; color: #d8fff5;
+    text-shadow: 0 0 18px var(--accent-soft), 0 0 4px var(--accent);
+    white-space: nowrap; position: relative;
+    animation: glitch 7s infinite;
+  }
+  @keyframes glitch {
+    0%, 96.5%, 100% { transform: none; text-shadow: 0 0 18px var(--accent-soft), 0 0 4px var(--accent); }
+    97% { transform: translate(-2px, 1px) skewX(3deg);
+          text-shadow: -3px 0 rgba(255,71,87,.8), 3px 0 rgba(34,224,189,.9); }
+    97.6% { transform: translate(2px, -1px) skewX(-2deg);
+            text-shadow: 3px 0 rgba(255,71,87,.7), -3px 0 rgba(56,217,248,.8); }
+    98.2% { transform: none; }
+  }
+  .tagline { font-size: .58rem; letter-spacing: .34em; color: var(--dim); text-transform: uppercase; margin-top: .15rem; }
+
+  /* circuit trace filler */
+  .traces { flex: 1; height: 40px; min-width: 60px; opacity: .8; }
+  .traces polyline, .traces line { stroke: var(--line); stroke-width: 1; fill: none; }
+  .traces circle { fill: var(--accent); opacity: .5; }
+  .traces .blip { animation: blip 3.2s ease-in-out infinite; }
+  .traces .blip.d1 { animation-delay: 1.1s; } .traces .blip.d2 { animation-delay: 2.2s; }
+  @keyframes blip { 0%,100% { opacity: .15; } 50% { opacity: .9; } }
+
+  .readout { text-align: right; font-size: .66rem; letter-spacing: .18em; color: var(--dim); text-transform: uppercase; }
+  .readout div:first-child { font-size: 1rem; color: var(--text); letter-spacing: .12em; }
   #conn { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%;
           background: #ff4757; box-shadow: 0 0 8px #ff4757; margin-right: .4rem; vertical-align: middle; }
   #conn.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 
   /* ---------- layout ---------- */
-  main { flex: 1; display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 1rem;
+  main { flex: 1; display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 1rem;
          padding: 1rem 1.4rem; min-height: 0; }
-  footer { height: 27vh; min-height: 150px; padding: 0 1.4rem 1rem; }
+  footer { height: 25vh; min-height: 140px; padding: 0 1.4rem 1rem; }
 
   .panel {
     position: relative; border: 1px solid var(--line); background: var(--panel);
     backdrop-filter: blur(3px); display: flex; flex-direction: column; min-height: 0;
     clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+    transition: border-color .25s, box-shadow .25s;
   }
+  .panel:hover { border-color: var(--accent-soft); box-shadow: 0 0 24px rgba(34,224,189,.07) inset; }
   .panel h2 {
-    font-size: .62rem; font-weight: 600; letter-spacing: .4em; text-transform: uppercase;
+    font-size: .6rem; font-weight: 600; letter-spacing: .4em; text-transform: uppercase;
     color: var(--accent); padding: .55rem .9rem; border-bottom: 1px solid var(--line);
     text-shadow: 0 0 10px var(--accent-soft);
   }
@@ -81,69 +103,50 @@
                  scrollbar-color: var(--accent-soft) transparent; font-size: .82rem; }
 
   /* ---------- transcript ---------- */
-  .msg { margin-bottom: .65rem; max-width: 95%; }
-  .msg .who { font-size: .58rem; letter-spacing: .3em; text-transform: uppercase; color: var(--dim); }
+  .msg { margin-bottom: .65rem; max-width: 95%; animation: rise .25s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .msg .who { font-size: .56rem; letter-spacing: .3em; text-transform: uppercase; color: var(--dim); }
   .msg .txt { margin-top: .15rem; padding: .45rem .6rem; border-left: 2px solid var(--accent);
-              background: rgba(56,217,248,.06); }
-  .msg.jarvis .txt { border-left-color: #8f7bff; background: rgba(143,123,255,.07); }
-  .msg.jarvis .who { color: #8f7bff; }
+              background: rgba(34,224,189,.06); }
+  .msg.jarvis .txt { border-left-color: #57b8ff; background: rgba(87,184,255,.06); }
+  .msg.jarvis .who { color: #57b8ff; }
 
-  /* ---------- reactor column ---------- */
-  .core-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.1rem; }
-  .reactor-wrap { position: relative; width: min(34vh, 88%); aspect-ratio: 1; }
-  .reactor-wrap::before { /* meter-driven ambient glow */
-    content: ""; position: absolute; inset: -12%; border-radius: 50%;
-    background: radial-gradient(circle, var(--accent-soft), transparent 62%);
-    opacity: calc(.35 + var(--level) * .65);
-    transform: scale(calc(.92 + var(--level) * .22));
-    transition: opacity .12s linear, transform .12s linear;
-  }
-  svg.reactor { position: relative; width: 100%; height: 100%; display: block; }
-  .ring-outer  { transform-origin: 50% 50%; animation: spin var(--spin) linear infinite; }
-  .ring-mid    { transform-origin: 50% 50%; animation: spin calc(var(--spin) * 1.8) linear infinite reverse; }
-  .ring-slots  { transform-origin: 50% 50%; animation: spin calc(var(--spin) * 3.2) linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .core-pulse { transform-origin: 50% 50%; animation: breathe 3.2s ease-in-out infinite; }
-  body[data-state="listening"] .core-pulse { animation-duration: 1.1s; }
-  body[data-state="confirming"] .core-pulse { animation-duration: .7s; }
-  @keyframes breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
-  .sonar { position: absolute; inset: 6%; border: 1px solid var(--accent); border-radius: 50%;
-           opacity: 0; pointer-events: none; }
-  body[data-state="listening"] .sonar { animation: sonar 1.6s ease-out infinite; }
-  @keyframes sonar { 0% { transform: scale(.62); opacity: .7; } 100% { transform: scale(1.12); opacity: 0; } }
-
+  /* ---------- core column ---------- */
+  .core-col { display: flex; flex-direction: column; align-items: center; min-height: 0; }
+  #stage { flex: 1; width: 100%; min-height: 0; cursor: crosshair; }
   #state-label { font-size: .95rem; letter-spacing: .55em; text-transform: uppercase;
-                 color: var(--accent); text-shadow: 0 0 16px var(--accent-soft); text-align: center; }
-  #state-hint { font-size: .62rem; letter-spacing: .2em; color: var(--dim); text-transform: uppercase; }
-
-  .models { display: flex; gap: 1.4rem; font-size: .6rem; letter-spacing: .12em;
-            color: var(--dim); text-transform: uppercase; }
+                 color: var(--accent); text-shadow: 0 0 16px var(--accent-soft);
+                 text-align: center; margin-top: .35rem; }
+  #state-hint { font-size: .6rem; letter-spacing: .2em; color: var(--dim);
+                text-transform: uppercase; margin: .3rem 0 .5rem; }
+  .models { display: flex; gap: 1.3rem; font-size: .58rem; letter-spacing: .12em;
+            color: var(--dim); text-transform: uppercase; padding-bottom: .3rem; }
   .models span b { display: block; color: var(--text); font-weight: 400; letter-spacing: .05em;
                    text-transform: none; margin-top: .1rem; }
 
-  /* ---------- intent column ---------- */
+  /* ---------- intent ---------- */
   .kv { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .8rem; }
-  .kv dt { color: var(--dim); font-size: .62rem; letter-spacing: .25em; text-transform: uppercase; padding-top: .18rem; }
+  .kv dt { color: var(--dim); font-size: .6rem; letter-spacing: .25em; text-transform: uppercase; padding-top: .18rem; }
   .kv dd { word-break: break-word; }
   #i-action { font-size: 1.05rem; color: var(--accent); letter-spacing: .08em; }
   .chip { display: inline-block; margin: .12rem .25rem .12rem 0; padding: .12rem .5rem;
-          border: 1px solid var(--line); font-size: .72rem; background: rgba(56,217,248,.05); }
+          border: 1px solid var(--line); font-size: .72rem; background: rgba(34,224,189,.05); }
   .chip b { color: var(--dim); font-weight: 400; margin-right: .35rem; }
-  .badge { display: inline-block; padding: .14rem .55rem; font-size: .6rem;
+  .badge { display: inline-block; padding: .14rem .55rem; font-size: .58rem;
            letter-spacing: .28em; text-transform: uppercase; border: 1px solid; }
-  .badge.safe { color: #4dff9e; border-color: rgba(77,255,158,.5); background: rgba(77,255,158,.07); }
+  .badge.safe { color: #59ff9e; border-color: rgba(89,255,158,.5); background: rgba(89,255,158,.07); }
   .badge.destructive { color: #ff4757; border-color: rgba(255,71,87,.6); background: rgba(255,71,87,.08);
                        animation: blink 1.1s step-end infinite; }
   @keyframes blink { 50% { opacity: .45; } }
-  .verdict.ok { color: #4dff9e; } .verdict.deny { color: #ff4757; }
+  .verdict.ok { color: #59ff9e; } .verdict.deny { color: #ff4757; }
   .placeholder { color: var(--dim); font-size: .75rem; letter-spacing: .15em; }
 
   /* ---------- log ---------- */
   footer .panel { height: 100%; }
-  #log { font-family: Consolas, "Cascadia Mono", monospace; font-size: .74rem; line-height: 1.5; }
+  #log { font-family: Consolas, "Cascadia Mono", monospace; font-size: .73rem; line-height: 1.5; }
   .ll { white-space: pre-wrap; word-break: break-word; }
   .ll .t { color: var(--dim); }
-  .ll .lg { color: #6ea6bd; }
+  .ll .lg { color: #5da892; }
   .ll.INFO .lv { color: var(--accent); }
   .ll.WARNING .lv { color: #ffb547; }
   .ll.ERROR .lv, .ll.CRITICAL .lv { color: #ff4757; }
@@ -152,11 +155,24 @@
 </head>
 <body data-state="offline">
   <header>
-    <div>
-      <div class="brand"><b>J</b>.A.R.V.I.S</div>
+    <svg class="emblem" viewBox="0 0 44 44">
+      <circle cx="22" cy="22" r="20" fill="none" stroke="var(--accent)" stroke-opacity=".4"
+              stroke-width="1.5" stroke-dasharray="18 6 4 6" class="r1"/>
+      <circle cx="22" cy="22" r="13" fill="none" stroke="var(--accent)" stroke-opacity=".6"
+              stroke-width="2.5" stroke-dasharray="3 5" class="r2"/>
+      <circle cx="22" cy="22" r="5" fill="var(--accent)" fill-opacity=".85"/>
+    </svg>
+    <div class="brand-wrap">
+      <div class="brand">J.A.R.V.I.S.</div>
       <div class="tagline">Just a rather very intelligent system</div>
     </div>
-    <div class="spacer"></div>
+    <svg class="traces" preserveAspectRatio="none" viewBox="0 0 400 40">
+      <polyline points="0,20 60,20 75,8 150,8 165,20 400,20"/>
+      <polyline points="0,30 90,30 105,34 240,34 255,26 400,26"/>
+      <circle class="blip" cx="75" cy="8" r="2.4"/>
+      <circle class="blip d1" cx="165" cy="20" r="2.4"/>
+      <circle class="blip d2" cx="255" cy="26" r="2.4"/>
+    </svg>
     <div class="readout"><div id="clock">--:--:--</div><div>local time</div></div>
     <div class="readout"><div id="uptime">00:00</div><div>uptime</div></div>
     <div class="readout"><div><span id="conn"></span><span id="conn-txt">OFFLINE</span></div><div>link</div></div>
@@ -171,38 +187,9 @@
     </section>
 
     <section class="core-col">
-      <div class="reactor-wrap">
-        <div class="sonar"></div>
-        <svg class="reactor" viewBox="0 0 200 200">
-          <defs>
-            <radialGradient id="coreGrad" cx="50%" cy="50%">
-              <stop offset="0%"  stop-color="#eaffff"/>
-              <stop offset="35%" stop-color="var(--accent)"/>
-              <stop offset="100%" stop-color="transparent"/>
-            </radialGradient>
-          </defs>
-          <!-- outer dashed ring -->
-          <g class="ring-outer">
-            <circle cx="100" cy="100" r="92" fill="none" stroke="var(--accent)" stroke-opacity=".5"
-                    stroke-width="2" stroke-dasharray="40 18 8 18"/>
-          </g>
-          <!-- mid tick ring -->
-          <g class="ring-mid">
-            <circle cx="100" cy="100" r="76" fill="none" stroke="var(--accent)" stroke-opacity=".35"
-                    stroke-width="6" stroke-dasharray="2 10"/>
-          </g>
-          <!-- slotted reactor ring -->
-          <g class="ring-slots" id="slots" stroke="var(--accent)" stroke-opacity=".9"></g>
-          <circle cx="100" cy="100" r="40" fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1.5"/>
-          <!-- core -->
-          <circle class="core-pulse" cx="100" cy="100" r="34" fill="url(#coreGrad)"/>
-          <circle cx="100" cy="100" r="12" fill="#f2ffff"/>
-        </svg>
-      </div>
-      <div>
-        <div id="state-label">Offline</div>
-      </div>
-      <div id="state-hint">connect: start jarvis · say “hey jarvis”</div>
+      <canvas id="stage"></canvas>
+      <div id="state-label">Offline</div>
+      <div id="state-hint">connect: start jarvis</div>
       <div class="models">
         <span>Wake<b id="m-wake">—</b></span>
         <span>STT<b id="m-stt">—</b></span>
@@ -233,149 +220,369 @@
   </footer>
 
 <script>
-  "use strict";
-  // Slotted ring: 10 rounded slots around the core, Stark style.
-  (function buildSlots() {
-    const g = document.getElementById("slots");
-    for (let i = 0; i < 10; i++) {
-      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      r.setAttribute("x", "95.5"); r.setAttribute("y", "44");
-      r.setAttribute("width", "9"); r.setAttribute("height", "18");
-      r.setAttribute("rx", "3"); r.setAttribute("fill", "var(--accent)"); r.setAttribute("fill-opacity", ".85");
-      r.setAttribute("transform", `rotate(${i * 36} 100 100)`);
-      g.appendChild(r);
+"use strict";
+/* ========================================================================
+   THE CORE — wireframe icosphere inside a turbulent particle energy ring.
+   Interactive: tilts toward the mouse, pulses on wake / click, agitation
+   follows the live mic meter, color and speed follow pipeline state.
+   ======================================================================== */
+const STATE_STYLE = {
+  idle:         { color: "#22e0bd", speed: 1.0, energy: 0.25 },
+  listening:    { color: "#35f5cd", speed: 1.6, energy: 0.85 },
+  transcribing: { color: "#7d8bff", speed: 1.3, energy: 0.55 },
+  thinking:     { color: "#ffb547", speed: 2.6, energy: 0.75 },
+  confirming:   { color: "#ff4757", speed: 1.8, energy: 0.95 },
+  executing:    { color: "#59ff9e", speed: 2.0, energy: 0.65 },
+  speaking:     { color: "#38d9f8", speed: 1.2, energy: 0.55 },
+  offline:      { color: "#3d5a52", speed: 0.4, energy: 0.10 },
+};
+const HINTS = {
+  idle: "say “hey jarvis” to begin",
+  listening: "listening — speak your command",
+  transcribing: "decoding speech…",
+  thinking: "parsing intent…",
+  confirming: "destructive action — say yes or no",
+  executing: "executing…",
+  speaking: "responding…",
+  offline: "connect: start jarvis",
+};
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+new ResizeObserver(resize).observe(canvas);
+
+/* ---- color helpers ---- */
+function hexRgb(hex) {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+let colorNow = hexRgb(STATE_STYLE.offline.color);
+let colorTarget = colorNow.slice();
+const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+/* ---- glow sprite (pre-rendered radial gradient = cheap particle glow) ---- */
+const sprite = document.createElement("canvas");
+sprite.width = sprite.height = 64;
+{
+  const s = sprite.getContext("2d");
+  const g = s.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.25, "rgba(255,255,255,.55)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  s.fillStyle = g; s.fillRect(0, 0, 64, 64);
+}
+const tinted = document.createElement("canvas");
+tinted.width = tinted.height = 64;
+const tintedCtx = tinted.getContext("2d");
+function retint() {
+  tintedCtx.globalCompositeOperation = "source-over";
+  tintedCtx.clearRect(0, 0, 64, 64);
+  tintedCtx.drawImage(sprite, 0, 0);
+  tintedCtx.globalCompositeOperation = "source-in";
+  tintedCtx.fillStyle = rgba(colorNow, 1);
+  tintedCtx.fillRect(0, 0, 64, 64);
+}
+
+/* ---- icosphere wireframe ---- */
+function icosphere(subdiv) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  let verts = [
+    [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+    [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1],
+  ].map(v => { const l = Math.hypot(...v); return v.map(x => x / l); });
+  let faces = [
+    [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],
+    [10,7,6],[7,1,8],[3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],
+    [2,4,11],[6,2,10],[8,6,7],[9,8,1],
+  ];
+  for (let s = 0; s < subdiv; s++) {
+    const cache = new Map(); const nf = [];
+    const mid = (a, b) => {
+      const key = a < b ? a + "_" + b : b + "_" + a;
+      if (cache.has(key)) return cache.get(key);
+      const m = verts[a].map((x, i) => (x + verts[b][i]) / 2);
+      const l = Math.hypot(...m);
+      verts.push(m.map(x => x / l));
+      cache.set(key, verts.length - 1);
+      return verts.length - 1;
+    };
+    for (const [a, b, c] of faces) {
+      const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+      nf.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]);
     }
-  })();
+    faces = nf;
+  }
+  const edges = new Set();
+  for (const [a, b, c] of faces)
+    for (const [p, q] of [[a, b], [b, c], [c, a]])
+      edges.add(p < q ? p + "_" + q : q + "_" + p);
+  return { verts, edges: [...edges].map(e => e.split("_").map(Number)) };
+}
+const SPHERE = icosphere(1); // 42 verts / 120 edges — crisp, not noisy
 
-  const $ = (id) => document.getElementById(id);
-  const HINTS = {
-    idle: "say “hey jarvis” to begin",
-    listening: "listening — speak your command",
-    transcribing: "decoding speech…",
-    thinking: "parsing intent…",
-    confirming: "destructive action — say yes or no",
-    executing: "executing…",
-    speaking: "responding…",
-    offline: "connect: start jarvis",
+/* ---- particle ring ---- */
+const N = 750;
+const particles = [];
+for (let i = 0; i < N; i++) {
+  const band = Math.random();
+  particles.push({
+    theta: Math.random() * Math.PI * 2,
+    r: 1.45 + Math.pow(Math.random(), 1.6) * 0.85,     // sphere radius = 1
+    y: (Math.random() - 0.5) * 0.38 * (band < 0.8 ? 1 : 2.2),
+    speed: (0.12 + Math.random() * 0.35) * (Math.random() < 0.5 ? 1 : -1),
+    size: 1.5 + Math.random() * 3.5,
+    seed: Math.random() * 1000,
+    flick: 0.5 + Math.random() * 0.5,
+  });
+}
+
+/* ---- interaction state ---- */
+let mouseX = 0, mouseY = 0;          // -1..1 parallax
+let agitation = 0, agitationTarget = 0;
+let speedNow = STATE_STYLE.offline.speed, speedTarget = speedNow;
+let energyNow = 0.1, energyTarget = 0.1;
+const pulses = [];                    // expanding shockwaves
+
+canvas.addEventListener("pointermove", (e) => {
+  const r = canvas.getBoundingClientRect();
+  mouseX = ((e.clientX - r.left) / r.width) * 2 - 1;
+  mouseY = ((e.clientY - r.top) / r.height) * 2 - 1;
+});
+canvas.addEventListener("pointerleave", () => { mouseX = 0; mouseY = 0; });
+canvas.addEventListener("pointerdown", () => {
+  pulses.push({ r: 0.4, a: 0.9 });
+  agitationTarget = Math.min(1, agitationTarget + 0.6);
+});
+
+/* ---- projection ---- */
+function project(p, rotY, rotX, scale, cx, cy) {
+  let [x, y, z] = p;
+  let c = Math.cos(rotY), s = Math.sin(rotY);
+  [x, z] = [x * c - z * s, x * s + z * c];
+  c = Math.cos(rotX); s = Math.sin(rotX);
+  [y, z] = [y * c - z * s, y * s + z * c];
+  const f = 3.2 / (3.2 + z);
+  return [cx + x * scale * f, cy + y * scale * f, z, f];
+}
+
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (document.hidden || W === 0) { last = now; return; }
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  const t = now / 1000;
+
+  // smooth toward targets
+  const lerp = (a, b, k) => a + (b - a) * Math.min(1, k * dt);
+  agitationTarget = Math.max(0, agitationTarget - dt * 0.8); // decay
+  agitation = lerp(agitation, agitationTarget + energyNow * 0.3, 5);
+  speedNow = lerp(speedNow, speedTarget, 3);
+  energyNow = lerp(energyNow, energyTarget, 3);
+  for (let i = 0; i < 3; i++) colorNow[i] = lerp(colorNow[i], colorTarget[i], 4);
+  retint();
+
+  ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const scale = Math.min(W, H) * 0.21;
+  const rotY = t * 0.22 * speedNow + mouseX * 0.55;
+  const rotX = 0.42 + Math.sin(t * 0.13) * 0.06 + mouseY * 0.35;
+
+  /* particles (back half) + sphere + particles (front half) */
+  ctx.globalCompositeOperation = "lighter";
+  const back = [], front = [];
+  for (const p of particles) {
+    const wob = agitation * 0.5 + 0.06;
+    const r = p.r + Math.sin(t * 1.7 * p.speed * 6 + p.seed) * wob * 0.45;
+    const y = p.y + Math.sin(t * 2.3 + p.seed * 2) * wob * 0.3;
+    p.theta += dt * p.speed * speedNow * (1 + agitation * 1.6);
+    const pos = [r * Math.cos(p.theta), y, r * Math.sin(p.theta)];
+    const [sx, sy, z, f] = project(pos, rotY * 0.35, rotX, scale, cx, cy);
+    (z > 0 ? back : front).push([sx, sy, f, p]);
+  }
+  const drawP = ([sx, sy, f, p]) => {
+    const flicker = 0.55 + 0.45 * Math.sin(t * 6 * p.flick + p.seed);
+    const a = (0.14 + 0.5 * flicker * (0.4 + agitation)) * f * f;
+    const sz = p.size * f * (1 + agitation * 0.7) * (Math.min(W, H) / 420);
+    ctx.globalAlpha = Math.min(a, 0.85);
+    ctx.drawImage(tinted, sx - sz * 2, sy - sz * 2, sz * 4, sz * 4);
   };
+  back.forEach(drawP);
 
-  function setState(s) {
-    document.body.dataset.state = s;
-    $("state-label").textContent = s;
-    $("state-hint").textContent = HINTS[s] || "";
+  /* wireframe sphere */
+  ctx.globalAlpha = 1;
+  const pts = SPHERE.verts.map(v => project(v, rotY, rotX, scale * 0.98, cx, cy));
+  for (const [a, b] of SPHERE.edges) {
+    const [x1, y1, z1] = pts[a], [x2, y2, z2] = pts[b];
+    const depth = (z1 + z2) / 2;                      // -1 front .. 1 back
+    const alpha = 0.06 + (1 - (depth + 1) / 2) * (0.3 + energyNow * 0.35);
+    ctx.strokeStyle = rgba(colorNow, alpha);
+    ctx.lineWidth = depth < 0 ? 1.1 : 0.6;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
   }
-
-  function addMsg(who, text) {
-    const box = $("transcript");
-    if (box.firstElementChild && box.firstElementChild.classList.contains("placeholder"))
-      box.firstElementChild.remove();
-    const div = document.createElement("div");
-    div.className = "msg " + who;
-    const w = document.createElement("div"); w.className = "who"; w.textContent = who;
-    const t = document.createElement("div"); t.className = "txt"; t.textContent = text;
-    div.append(w, t);
-    box.appendChild(div);
-    while (box.children.length > 60) box.firstElementChild.remove();
-    box.scrollTop = box.scrollHeight;
-  }
-
-  function fill(id, node) {
-    const el = $(id); el.classList.remove("placeholder"); el.replaceChildren(node);
-  }
-  const textNode = (s) => document.createTextNode(s);
-
-  function onIntent(e) {
-    fill("i-action", textNode(e.action));
-    const wrap = document.createElement("span");
-    const params = e.params || {};
-    if (Object.keys(params).length === 0) wrap.textContent = "—";
-    for (const [k, v] of Object.entries(params)) {
-      const c = document.createElement("span"); c.className = "chip";
-      const b = document.createElement("b"); b.textContent = k;
-      c.append(b, textNode(String(v))); wrap.appendChild(c);
+  // vertex sparks
+  for (const [sx, sy, z, f] of pts) {
+    if (z < 0) {
+      ctx.globalAlpha = 0.5 * f;
+      ctx.drawImage(tinted, sx - 2.4, sy - 2.4, 4.8, 4.8);
     }
-    fill("i-params", wrap);
-    const badge = document.createElement("span");
-    badge.className = "badge " + (e.destructive ? "destructive" : "safe");
-    badge.textContent = e.destructive ? "destructive" : "safe";
-    fill("i-class", badge);
-    fill("i-gate", textNode(e.destructive ? "awaiting spoken confirmation…" : "not required"));
-    fill("i-result", textNode("…"));
   }
+  // core glow
+  ctx.globalAlpha = 0.5 + energyNow * 0.5 + agitation * 0.25;
+  const coreSz = scale * (0.55 + agitation * 0.12);
+  ctx.drawImage(tinted, cx - coreSz / 2, cy - coreSz / 2, coreSz, coreSz);
 
-  function onGate(e) {
-    const v = document.createElement("span");
-    v.className = "verdict " + (e.allowed ? "ok" : "deny");
-    v.textContent = (e.allowed ? "ALLOWED — " : "BLOCKED — ") + e.reason;
-    fill("i-gate", v);
+  front.forEach(drawP);
+
+  /* shockwave pulses */
+  ctx.globalCompositeOperation = "source-over";
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const pu = pulses[i];
+    pu.r += dt * 2.4; pu.a -= dt * 0.9;
+    if (pu.a <= 0) { pulses.splice(i, 1); continue; }
+    ctx.globalAlpha = pu.a;
+    ctx.strokeStyle = rgba(colorNow, 0.8);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, pu.r * scale, 0, Math.PI * 2); ctx.stroke();
   }
+  ctx.globalAlpha = 1;
+}
+requestAnimationFrame(frame);
 
-  function onResult(e) {
-    const v = document.createElement("span");
-    v.className = "verdict " + (e.ok ? "ok" : "deny");
-    v.textContent = (e.ok ? "✓ " : "✗ ") + e.message;
-    fill("i-result", v);
+/* ========================================================================
+   Live events (SSE) -> HUD panels + core styling
+   ======================================================================== */
+const $ = (id) => document.getElementById(id);
+
+function setState(s) {
+  const style = STATE_STYLE[s] || STATE_STYLE.idle;
+  document.body.dataset.state = s;
+  document.documentElement.style.setProperty("--accent", style.color);
+  document.documentElement.style.setProperty(
+    "--accent-soft", rgba(hexRgb(style.color), 0.35));
+  colorTarget = hexRgb(style.color);
+  speedTarget = style.speed;
+  energyTarget = style.energy;
+  if (s === "listening" || s === "confirming") pulses.push({ r: 0.4, a: 0.9 });
+  $("state-label").textContent = s;
+  $("state-hint").textContent = HINTS[s] || "";
+}
+
+function addMsg(who, text) {
+  const box = $("transcript");
+  if (box.firstElementChild && box.firstElementChild.classList.contains("placeholder"))
+    box.firstElementChild.remove();
+  const div = document.createElement("div");
+  div.className = "msg " + who;
+  const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+  const t = document.createElement("div"); t.className = "txt"; t.textContent = text;
+  div.append(w, t);
+  box.appendChild(div);
+  while (box.children.length > 60) box.firstElementChild.remove();
+  box.scrollTop = box.scrollHeight;
+}
+
+function fill(id, node) {
+  const el = $(id); el.classList.remove("placeholder"); el.replaceChildren(node);
+}
+const textNode = (s) => document.createTextNode(s);
+
+function onIntent(e) {
+  fill("i-action", textNode(e.action));
+  const wrap = document.createElement("span");
+  const params = e.params || {};
+  if (Object.keys(params).length === 0) wrap.textContent = "—";
+  for (const [k, v] of Object.entries(params)) {
+    const c = document.createElement("span"); c.className = "chip";
+    const b = document.createElement("b"); b.textContent = k;
+    c.append(b, textNode(String(v))); wrap.appendChild(c);
   }
+  fill("i-params", wrap);
+  const badge = document.createElement("span");
+  badge.className = "badge " + (e.destructive ? "destructive" : "safe");
+  badge.textContent = e.destructive ? "destructive" : "safe";
+  fill("i-class", badge);
+  fill("i-gate", textNode(e.destructive ? "awaiting spoken confirmation…" : "not required"));
+  fill("i-result", textNode("…"));
+}
 
-  function onLog(e) {
-    const box = $("log");
-    const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
-    const line = document.createElement("div");
-    line.className = "ll " + e.level;
-    const t = document.createElement("span"); t.className = "t"; t.textContent = e.t + " ";
-    const lv = document.createElement("span"); lv.className = "lv"; lv.textContent = e.level.padEnd(8) + " ";
-    const lg = document.createElement("span"); lg.className = "lg"; lg.textContent = e.logger + "  ";
-    line.append(t, lv, lg, textNode(e.msg));
-    box.appendChild(line);
-    while (box.children.length > 400) box.firstElementChild.remove();
-    if (stick) box.scrollTop = box.scrollHeight;
-  }
+function onGate(e) {
+  const v = document.createElement("span");
+  v.className = "verdict " + (e.allowed ? "ok" : "deny");
+  v.textContent = (e.allowed ? "ALLOWED — " : "BLOCKED — ") + e.reason;
+  fill("i-gate", v);
+}
 
-  function onStatus(e) {
-    $("m-wake").textContent = e.wake_model || "—";
-    $("m-stt").textContent = "whisper-" + (e.stt_model || "?");
-    $("m-llm").textContent = e.intent_model || "—";
-    $("m-tts").textContent = e.tts_voice || "—";
-  }
+function onResult(e) {
+  const v = document.createElement("span");
+  v.className = "verdict " + (e.ok ? "ok" : "deny");
+  v.textContent = (e.ok ? "✓ " : "✗ ") + e.message;
+  fill("i-result", v);
+}
 
-  // meter: reactor glow follows the room / voice level
-  let meterDecay = null;
-  function onMeter(e) {
-    const level = Math.max(Number(e.level) || 0, Math.min(1, Number(e.score) || 0));
-    document.documentElement.style.setProperty("--level", level.toFixed(3));
-    clearTimeout(meterDecay);
-    meterDecay = setTimeout(() => document.documentElement.style.setProperty("--level", "0"), 800);
-  }
+function onLog(e) {
+  const box = $("log");
+  const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
+  const line = document.createElement("div");
+  line.className = "ll " + e.level;
+  const t = document.createElement("span"); t.className = "t"; t.textContent = e.t + " ";
+  const lv = document.createElement("span"); lv.className = "lv"; lv.textContent = e.level.padEnd(8) + " ";
+  const lg = document.createElement("span"); lg.className = "lg"; lg.textContent = e.logger + "  ";
+  line.append(t, lv, lg, textNode(e.msg));
+  box.appendChild(line);
+  while (box.children.length > 400) box.firstElementChild.remove();
+  if (stick) box.scrollTop = box.scrollHeight;
+}
 
-  const HANDLERS = {
-    state: (e) => setState(e.state),
-    transcript: (e) => addMsg(e.who, e.text),
-    intent: onIntent,
-    gate: onGate,
-    result: onResult,
-    log: onLog,
-    status: onStatus,
-    meter: onMeter,
-  };
+function onStatus(e) {
+  $("m-wake").textContent = e.wake_model || "—";
+  $("m-stt").textContent = "whisper-" + (e.stt_model || "?");
+  $("m-llm").textContent = e.intent_model || "—";
+  $("m-tts").textContent = e.tts_voice || "—";
+}
 
-  const es = new EventSource("/events");
-  es.onopen = () => { $("conn").classList.add("on"); $("conn-txt").textContent = "ONLINE";
-                      if (document.body.dataset.state === "offline") setState("idle"); };
-  es.onerror = () => { $("conn").classList.remove("on"); $("conn-txt").textContent = "OFFLINE"; setState("offline"); };
-  es.onmessage = (m) => {
-    try { const e = JSON.parse(m.data); (HANDLERS[e.type] || (() => {}))(e); }
-    catch (err) { /* malformed event — ignore */ }
-  };
+function onMeter(e) {
+  const level = Math.max(Number(e.level) || 0, Math.min(1, Number(e.score) || 0));
+  agitationTarget = Math.max(agitationTarget, level);
+}
 
-  // clock + uptime
-  const t0 = Date.now();
-  setInterval(() => {
-    $("clock").textContent = new Date().toLocaleTimeString([], { hour12: false });
-    const s = Math.floor((Date.now() - t0) / 1000);
-    const mm = String(Math.floor(s / 60)).padStart(2, "0");
-    const hh = Math.floor(s / 3600);
-    $("uptime").textContent = (hh ? hh + ":" : "") + mm + ":" + String(s % 60).padStart(2, "0");
-  }, 1000);
+const HANDLERS = {
+  state: (e) => setState(e.state),
+  transcript: (e) => addMsg(e.who, e.text),
+  intent: onIntent,
+  gate: onGate,
+  result: onResult,
+  log: onLog,
+  status: onStatus,
+  meter: onMeter,
+};
+
+const es = new EventSource("/events");
+es.onopen = () => { $("conn").classList.add("on"); $("conn-txt").textContent = "ONLINE";
+                    if (document.body.dataset.state === "offline") setState("idle"); };
+es.onerror = () => { $("conn").classList.remove("on"); $("conn-txt").textContent = "OFFLINE"; setState("offline"); };
+es.onmessage = (m) => {
+  try { const e = JSON.parse(m.data); (HANDLERS[e.type] || (() => {}))(e); }
+  catch (err) { /* malformed event — ignore */ }
+};
+
+/* clock + uptime */
+const t0 = Date.now();
+setInterval(() => {
+  $("clock").textContent = new Date().toLocaleTimeString([], { hour12: false });
+  const s = Math.floor((Date.now() - t0) / 1000);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const hh = Math.floor(s / 3600);
+  $("uptime").textContent = (hh ? hh + ":" : "") + mm + ":" + String(s % 60).padStart(2, "0");
+}, 1000);
 </script>
 </body>
 </html>
