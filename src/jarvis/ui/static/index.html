@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>J.A.R.V.I.S — HUD</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #04070d;
+    --panel: rgba(10, 22, 34, .55);
+    --line: rgba(56, 217, 248, .22);
+    --text: #b8dbe8;
+    --dim: #557687;
+    --accent: #38d9f8;
+    --accent-soft: rgba(56, 217, 248, .35);
+    --level: 0;
+    --spin: 14s;
+  }
+  body[data-state="transcribing"] { --accent: #8f7bff; --accent-soft: rgba(143,123,255,.35); --spin: 6s; }
+  body[data-state="thinking"]     { --accent: #ffb547; --accent-soft: rgba(255,181,71,.35);  --spin: 2.5s; }
+  body[data-state="confirming"]   { --accent: #ff4757; --accent-soft: rgba(255,71,87,.45);   --spin: 4s; }
+  body[data-state="executing"]    { --accent: #4dff9e; --accent-soft: rgba(77,255,158,.35);  --spin: 3s; }
+  body[data-state="offline"]      { --accent: #5a6b75; --accent-soft: rgba(90,107,117,.3); }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: --accent .4s;
+  }
+  /* ambient grid + vignette + scanlines */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(56,217,248,.07), transparent 55%),
+      repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.16) 2px 4px),
+      linear-gradient(rgba(56,217,248,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,217,248,.035) 1px, transparent 1px);
+    background-size: auto, auto, 44px 44px, 44px 44px;
+  }
+  main, header, footer { position: relative; z-index: 1; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: center; gap: 1.2rem;
+    padding: .7rem 1.4rem;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(56,217,248,.06), transparent);
+  }
+  .brand { font-size: 1.25rem; font-weight: 300; letter-spacing: .55em; color: var(--accent);
+           text-shadow: 0 0 14px var(--accent-soft); white-space: nowrap; }
+  .brand b { font-weight: 600; }
+  .tagline { font-size: .6rem; letter-spacing: .3em; color: var(--dim); text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .readout { text-align: right; font-size: .68rem; letter-spacing: .18em; color: var(--dim); text-transform: uppercase; }
+  .readout div:first-child { font-size: 1.05rem; color: var(--text); letter-spacing: .12em; }
+  #conn { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%;
+          background: #ff4757; box-shadow: 0 0 8px #ff4757; margin-right: .4rem; vertical-align: middle; }
+  #conn.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  /* ---------- layout ---------- */
+  main { flex: 1; display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 1rem;
+         padding: 1rem 1.4rem; min-height: 0; }
+  footer { height: 27vh; min-height: 150px; padding: 0 1.4rem 1rem; }
+
+  .panel {
+    position: relative; border: 1px solid var(--line); background: var(--panel);
+    backdrop-filter: blur(3px); display: flex; flex-direction: column; min-height: 0;
+    clip-path: polygon(0 12px, 12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  }
+  .panel h2 {
+    font-size: .62rem; font-weight: 600; letter-spacing: .4em; text-transform: uppercase;
+    color: var(--accent); padding: .55rem .9rem; border-bottom: 1px solid var(--line);
+    text-shadow: 0 0 10px var(--accent-soft);
+  }
+  .panel .body { flex: 1; overflow-y: auto; padding: .7rem .9rem; scrollbar-width: thin;
+                 scrollbar-color: var(--accent-soft) transparent; font-size: .82rem; }
+
+  /* ---------- transcript ---------- */
+  .msg { margin-bottom: .65rem; max-width: 95%; }
+  .msg .who { font-size: .58rem; letter-spacing: .3em; text-transform: uppercase; color: var(--dim); }
+  .msg .txt { margin-top: .15rem; padding: .45rem .6rem; border-left: 2px solid var(--accent);
+              background: rgba(56,217,248,.06); }
+  .msg.jarvis .txt { border-left-color: #8f7bff; background: rgba(143,123,255,.07); }
+  .msg.jarvis .who { color: #8f7bff; }
+
+  /* ---------- reactor column ---------- */
+  .core-col { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.1rem; }
+  .reactor-wrap { position: relative; width: min(34vh, 88%); aspect-ratio: 1; }
+  .reactor-wrap::before { /* meter-driven ambient glow */
+    content: ""; position: absolute; inset: -12%; border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-soft), transparent 62%);
+    opacity: calc(.35 + var(--level) * .65);
+    transform: scale(calc(.92 + var(--level) * .22));
+    transition: opacity .12s linear, transform .12s linear;
+  }
+  svg.reactor { position: relative; width: 100%; height: 100%; display: block; }
+  .ring-outer  { transform-origin: 50% 50%; animation: spin var(--spin) linear infinite; }
+  .ring-mid    { transform-origin: 50% 50%; animation: spin calc(var(--spin) * 1.8) linear infinite reverse; }
+  .ring-slots  { transform-origin: 50% 50%; animation: spin calc(var(--spin) * 3.2) linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .core-pulse { transform-origin: 50% 50%; animation: breathe 3.2s ease-in-out infinite; }
+  body[data-state="listening"] .core-pulse { animation-duration: 1.1s; }
+  body[data-state="confirming"] .core-pulse { animation-duration: .7s; }
+  @keyframes breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+  .sonar { position: absolute; inset: 6%; border: 1px solid var(--accent); border-radius: 50%;
+           opacity: 0; pointer-events: none; }
+  body[data-state="listening"] .sonar { animation: sonar 1.6s ease-out infinite; }
+  @keyframes sonar { 0% { transform: scale(.62); opacity: .7; } 100% { transform: scale(1.12); opacity: 0; } }
+
+  #state-label { font-size: .95rem; letter-spacing: .55em; text-transform: uppercase;
+                 color: var(--accent); text-shadow: 0 0 16px var(--accent-soft); text-align: center; }
+  #state-hint { font-size: .62rem; letter-spacing: .2em; color: var(--dim); text-transform: uppercase; }
+
+  .models { display: flex; gap: 1.4rem; font-size: .6rem; letter-spacing: .12em;
+            color: var(--dim); text-transform: uppercase; }
+  .models span b { display: block; color: var(--text); font-weight: 400; letter-spacing: .05em;
+                   text-transform: none; margin-top: .1rem; }
+
+  /* ---------- intent column ---------- */
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .8rem; }
+  .kv dt { color: var(--dim); font-size: .62rem; letter-spacing: .25em; text-transform: uppercase; padding-top: .18rem; }
+  .kv dd { word-break: break-word; }
+  #i-action { font-size: 1.05rem; color: var(--accent); letter-spacing: .08em; }
+  .chip { display: inline-block; margin: .12rem .25rem .12rem 0; padding: .12rem .5rem;
+          border: 1px solid var(--line); font-size: .72rem; background: rgba(56,217,248,.05); }
+  .chip b { color: var(--dim); font-weight: 400; margin-right: .35rem; }
+  .badge { display: inline-block; padding: .14rem .55rem; font-size: .6rem;
+           letter-spacing: .28em; text-transform: uppercase; border: 1px solid; }
+  .badge.safe { color: #4dff9e; border-color: rgba(77,255,158,.5); background: rgba(77,255,158,.07); }
+  .badge.destructive { color: #ff4757; border-color: rgba(255,71,87,.6); background: rgba(255,71,87,.08);
+                       animation: blink 1.1s step-end infinite; }
+  @keyframes blink { 50% { opacity: .45; } }
+  .verdict.ok { color: #4dff9e; } .verdict.deny { color: #ff4757; }
+  .placeholder { color: var(--dim); font-size: .75rem; letter-spacing: .15em; }
+
+  /* ---------- log ---------- */
+  footer .panel { height: 100%; }
+  #log { font-family: Consolas, "Cascadia Mono", monospace; font-size: .74rem; line-height: 1.5; }
+  .ll { white-space: pre-wrap; word-break: break-word; }
+  .ll .t { color: var(--dim); }
+  .ll .lg { color: #6ea6bd; }
+  .ll.INFO .lv { color: var(--accent); }
+  .ll.WARNING .lv { color: #ffb547; }
+  .ll.ERROR .lv, .ll.CRITICAL .lv { color: #ff4757; }
+  .ll.DEBUG { opacity: .55; }
+</style>
+</head>
+<body data-state="offline">
+  <header>
+    <div>
+      <div class="brand"><b>J</b>.A.R.V.I.S</div>
+      <div class="tagline">Just a rather very intelligent system</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="readout"><div id="clock">--:--:--</div><div>local time</div></div>
+    <div class="readout"><div id="uptime">00:00</div><div>uptime</div></div>
+    <div class="readout"><div><span id="conn"></span><span id="conn-txt">OFFLINE</span></div><div>link</div></div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Transcript</h2>
+      <div class="body" id="transcript">
+        <div class="placeholder">Awaiting the first command…</div>
+      </div>
+    </section>
+
+    <section class="core-col">
+      <div class="reactor-wrap">
+        <div class="sonar"></div>
+        <svg class="reactor" viewBox="0 0 200 200">
+          <defs>
+            <radialGradient id="coreGrad" cx="50%" cy="50%">
+              <stop offset="0%"  stop-color="#eaffff"/>
+              <stop offset="35%" stop-color="var(--accent)"/>
+              <stop offset="100%" stop-color="transparent"/>
+            </radialGradient>
+          </defs>
+          <!-- outer dashed ring -->
+          <g class="ring-outer">
+            <circle cx="100" cy="100" r="92" fill="none" stroke="var(--accent)" stroke-opacity=".5"
+                    stroke-width="2" stroke-dasharray="40 18 8 18"/>
+          </g>
+          <!-- mid tick ring -->
+          <g class="ring-mid">
+            <circle cx="100" cy="100" r="76" fill="none" stroke="var(--accent)" stroke-opacity=".35"
+                    stroke-width="6" stroke-dasharray="2 10"/>
+          </g>
+          <!-- slotted reactor ring -->
+          <g class="ring-slots" id="slots" stroke="var(--accent)" stroke-opacity=".9"></g>
+          <circle cx="100" cy="100" r="40" fill="none" stroke="var(--accent)" stroke-opacity=".6" stroke-width="1.5"/>
+          <!-- core -->
+          <circle class="core-pulse" cx="100" cy="100" r="34" fill="url(#coreGrad)"/>
+          <circle cx="100" cy="100" r="12" fill="#f2ffff"/>
+        </svg>
+      </div>
+      <div>
+        <div id="state-label">Offline</div>
+      </div>
+      <div id="state-hint">connect: start jarvis · say “hey jarvis”</div>
+      <div class="models">
+        <span>Wake<b id="m-wake">—</b></span>
+        <span>STT<b id="m-stt">—</b></span>
+        <span>Intent<b id="m-llm">—</b></span>
+        <span>Voice<b id="m-tts">—</b></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Intent · Safety · Result</h2>
+      <div class="body">
+        <dl class="kv">
+          <dt>Action</dt><dd id="i-action" class="placeholder">—</dd>
+          <dt>Params</dt><dd id="i-params" class="placeholder">—</dd>
+          <dt>Class</dt><dd id="i-class" class="placeholder">—</dd>
+          <dt>Gate</dt><dd id="i-gate" class="placeholder">—</dd>
+          <dt>Result</dt><dd id="i-result" class="placeholder">—</dd>
+        </dl>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <section class="panel">
+      <h2>System Log</h2>
+      <div class="body" id="log"></div>
+    </section>
+  </footer>
+
+<script>
+  "use strict";
+  // Slotted ring: 10 rounded slots around the core, Stark style.
+  (function buildSlots() {
+    const g = document.getElementById("slots");
+    for (let i = 0; i < 10; i++) {
+      const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      r.setAttribute("x", "95.5"); r.setAttribute("y", "44");
+      r.setAttribute("width", "9"); r.setAttribute("height", "18");
+      r.setAttribute("rx", "3"); r.setAttribute("fill", "var(--accent)"); r.setAttribute("fill-opacity", ".85");
+      r.setAttribute("transform", `rotate(${i * 36} 100 100)`);
+      g.appendChild(r);
+    }
+  })();
+
+  const $ = (id) => document.getElementById(id);
+  const HINTS = {
+    idle: "say “hey jarvis” to begin",
+    listening: "listening — speak your command",
+    transcribing: "decoding speech…",
+    thinking: "parsing intent…",
+    confirming: "destructive action — say yes or no",
+    executing: "executing…",
+    speaking: "responding…",
+    offline: "connect: start jarvis",
+  };
+
+  function setState(s) {
+    document.body.dataset.state = s;
+    $("state-label").textContent = s;
+    $("state-hint").textContent = HINTS[s] || "";
+  }
+
+  function addMsg(who, text) {
+    const box = $("transcript");
+    if (box.firstElementChild && box.firstElementChild.classList.contains("placeholder"))
+      box.firstElementChild.remove();
+    const div = document.createElement("div");
+    div.className = "msg " + who;
+    const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+    const t = document.createElement("div"); t.className = "txt"; t.textContent = text;
+    div.append(w, t);
+    box.appendChild(div);
+    while (box.children.length > 60) box.firstElementChild.remove();
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function fill(id, node) {
+    const el = $(id); el.classList.remove("placeholder"); el.replaceChildren(node);
+  }
+  const textNode = (s) => document.createTextNode(s);
+
+  function onIntent(e) {
+    fill("i-action", textNode(e.action));
+    const wrap = document.createElement("span");
+    const params = e.params || {};
+    if (Object.keys(params).length === 0) wrap.textContent = "—";
+    for (const [k, v] of Object.entries(params)) {
+      const c = document.createElement("span"); c.className = "chip";
+      const b = document.createElement("b"); b.textContent = k;
+      c.append(b, textNode(String(v))); wrap.appendChild(c);
+    }
+    fill("i-params", wrap);
+    const badge = document.createElement("span");
+    badge.className = "badge " + (e.destructive ? "destructive" : "safe");
+    badge.textContent = e.destructive ? "destructive" : "safe";
+    fill("i-class", badge);
+    fill("i-gate", textNode(e.destructive ? "awaiting spoken confirmation…" : "not required"));
+    fill("i-result", textNode("…"));
+  }
+
+  function onGate(e) {
+    const v = document.createElement("span");
+    v.className = "verdict " + (e.allowed ? "ok" : "deny");
+    v.textContent = (e.allowed ? "ALLOWED — " : "BLOCKED — ") + e.reason;
+    fill("i-gate", v);
+  }
+
+  function onResult(e) {
+    const v = document.createElement("span");
+    v.className = "verdict " + (e.ok ? "ok" : "deny");
+    v.textContent = (e.ok ? "✓ " : "✗ ") + e.message;
+    fill("i-result", v);
+  }
+
+  function onLog(e) {
+    const box = $("log");
+    const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
+    const line = document.createElement("div");
+    line.className = "ll " + e.level;
+    const t = document.createElement("span"); t.className = "t"; t.textContent = e.t + " ";
+    const lv = document.createElement("span"); lv.className = "lv"; lv.textContent = e.level.padEnd(8) + " ";
+    const lg = document.createElement("span"); lg.className = "lg"; lg.textContent = e.logger + "  ";
+    line.append(t, lv, lg, textNode(e.msg));
+    box.appendChild(line);
+    while (box.children.length > 400) box.firstElementChild.remove();
+    if (stick) box.scrollTop = box.scrollHeight;
+  }
+
+  function onStatus(e) {
+    $("m-wake").textContent = e.wake_model || "—";
+    $("m-stt").textContent = "whisper-" + (e.stt_model || "?");
+    $("m-llm").textContent = e.intent_model || "—";
+    $("m-tts").textContent = e.tts_voice || "—";
+  }
+
+  // meter: reactor glow follows the room / voice level
+  let meterDecay = null;
+  function onMeter(e) {
+    const level = Math.max(Number(e.level) || 0, Math.min(1, Number(e.score) || 0));
+    document.documentElement.style.setProperty("--level", level.toFixed(3));
+    clearTimeout(meterDecay);
+    meterDecay = setTimeout(() => document.documentElement.style.setProperty("--level", "0"), 800);
+  }
+
+  const HANDLERS = {
+    state: (e) => setState(e.state),
+    transcript: (e) => addMsg(e.who, e.text),
+    intent: onIntent,
+    gate: onGate,
+    result: onResult,
+    log: onLog,
+    status: onStatus,
+    meter: onMeter,
+  };
+
+  const es = new EventSource("/events");
+  es.onopen = () => { $("conn").classList.add("on"); $("conn-txt").textContent = "ONLINE";
+                      if (document.body.dataset.state === "offline") setState("idle"); };
+  es.onerror = () => { $("conn").classList.remove("on"); $("conn-txt").textContent = "OFFLINE"; setState("offline"); };
+  es.onmessage = (m) => {
+    try { const e = JSON.parse(m.data); (HANDLERS[e.type] || (() => {}))(e); }
+    catch (err) { /* malformed event — ignore */ }
+  };
+
+  // clock + uptime
+  const t0 = Date.now();
+  setInterval(() => {
+    $("clock").textContent = new Date().toLocaleTimeString([], { hour12: false });
+    const s = Math.floor((Date.now() - t0) / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, "0");
+    const hh = Math.floor(s / 3600);
+    $("uptime").textContent = (hh ? hh + ":" : "") + mm + ":" + String(s % 60).padStart(2, "0");
+  }, 1000);
+</script>
+</body>
+</html>

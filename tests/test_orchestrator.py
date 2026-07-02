@@ -11,7 +11,7 @@ import pytest
 import jarvis.orchestrator as orch_mod
 from jarvis.config import (
     AudioConfig, Config, ExecutionConfig, IntentConfig, LoggingConfig,
-    STTConfig, SafetyConfig, ServiceConfig, TTSConfig, WakeWordConfig,
+    STTConfig, SafetyConfig, ServiceConfig, TTSConfig, UIConfig, WakeWordConfig,
 )
 from jarvis.execution.executor import ExecutionResult
 from jarvis.intent.parser import Intent, IntentError
@@ -22,7 +22,8 @@ from jarvis.stt.transcriber import Transcription
 CONFIG = Config(
     logging=LoggingConfig(), audio=AudioConfig(), wake_word=WakeWordConfig(),
     safety=SafetyConfig(), execution=ExecutionConfig(), stt=STTConfig(),
-    intent=IntentConfig(), tts=TTSConfig(), service=ServiceConfig(),
+    intent=IntentConfig(), tts=TTSConfig(), ui=UIConfig(enabled=False),
+    service=ServiceConfig(),
 )
 
 UTTERANCE = np.zeros(16000, dtype=np.int16)
@@ -193,6 +194,33 @@ def test_ask_confirmation_without_mic_denies():
     orch, _ = _orchestrator()
     orch._mic = None
     assert orch._ask_confirmation("Proceed?") is None
+
+
+def test_pipeline_events_published_to_bus():
+    """The HUD bus must see the state walk and the key payload events."""
+    import json
+
+    from jarvis.ui.events import BUS
+
+    q = BUS.subscribe(replay=False)
+    try:
+        orch, _ = _orchestrator()
+        orch._handle_command(FakeMic())
+        events = []
+        while True:
+            try:
+                events.append(json.loads(q.get_nowait()))
+            except Exception:
+                break
+        states = [e["state"] for e in events if e["type"] == "state"]
+        types = {e["type"] for e in events}
+        assert states[:4] == ["listening", "transcribing", "thinking", "executing"]
+        assert {"transcript", "intent", "gate", "result"} <= types
+        intent_evt = next(e for e in events if e["type"] == "intent")
+        assert intent_evt["action"] == "open_app"
+        assert intent_evt["destructive"] is False
+    finally:
+        BUS.unsubscribe(q)
 
 
 def test_real_gate_full_round_trip_deny():

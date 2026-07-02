@@ -133,6 +133,14 @@ class TTSConfig:
 
 
 @dataclass(frozen=True)
+class UIConfig:
+    enabled: bool = True
+    host: str = "127.0.0.1"   # loopback only — the HUD is private to this machine
+    port: int = 8765
+    open_browser: bool = True  # open the HUD when J.A.R.I.V.S starts
+
+
+@dataclass(frozen=True)
 class ServiceConfig:
     task_name: str = "JARVIS Voice Assistant"
     restart_on_crash: bool = True
@@ -152,6 +160,7 @@ class Config:
     stt: STTConfig
     intent: IntentConfig
     tts: TTSConfig
+    ui: UIConfig
     service: ServiceConfig
 
 
@@ -267,6 +276,7 @@ def load_config(path: str | os.PathLike[str] = "config/config.yaml") -> Config:
         stt=_construct(STTConfig, _section(raw, "stt"), "stt", strict=True),
         intent=_construct(IntentConfig, _section(raw, "intent"), "intent", strict=True),
         tts=_construct(TTSConfig, _section(raw, "tts"), "tts", strict=True),
+        ui=_construct(UIConfig, _section(raw, "ui"), "ui", strict=True),
         service=_construct(ServiceConfig, _section(raw, "service"), "service", strict=True),
     )
     _validate(cfg)
@@ -365,6 +375,12 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("tts.speaker_id must be >= 0")
     if tts.volume < 0:
         raise ConfigError("tts.volume must be >= 0")
+
+    ui = cfg.ui
+    if not ui.host.strip():
+        raise ConfigError("ui.host must not be empty")
+    if not 1 <= ui.port <= 65535:
+        raise ConfigError("ui.port must be in [1, 65535]")
 
     svc = cfg.service
     if not svc.task_name.strip():

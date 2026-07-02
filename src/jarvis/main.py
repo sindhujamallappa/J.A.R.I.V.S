@@ -35,6 +35,17 @@ def main() -> int:
     configure_logging(cfg.logging)
     log.info("Starting %s", "J.A.R.I.V.S")
 
+    # Two instances would fight over the microphone; refuse to double-start.
+    from .service import SingleInstance, _lock_path, _mutex_name
+
+    guard = SingleInstance(_mutex_name(cfg.service.task_name), _lock_path())
+    if cfg.service.single_instance and not guard.acquire():
+        log.error("Another J.A.R.I.V.S instance is already running — exiting")
+        return 1
+
+    from .ui.server import maybe_start_ui
+
+    ui_server = maybe_start_ui(cfg.ui)
     try:
         Orchestrator(cfg, speaker=build_speaker(cfg.tts)).run()
     except KeyboardInterrupt:
@@ -42,6 +53,10 @@ def main() -> int:
     except Exception:  # noqa: BLE001 — top-level guard for graceful exit
         log.exception("Fatal error in main loop")
         return 1
+    finally:
+        if ui_server is not None:
+            ui_server.stop()
+        guard.release()
     return 0
 
 

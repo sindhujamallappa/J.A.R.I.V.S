@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from . import __version__
+from .actions import is_destructive
 from .config import Config
 from .execution.executor import Executor
 from .intent.parser import IntentError, IntentParser
@@ -24,6 +26,7 @@ from .safety.gate import ConfirmationGate
 from .stt.capture import UtteranceCapturer
 from .stt.transcriber import Transcriber
 from .tts.speaker import Speaker
+from .ui.events import BUS
 from .utils.audio import MicrophoneStream, play_tone
 from .wake_word.listener import WakeWordListener
 
@@ -58,20 +61,32 @@ class Orchestrator:
     def run(self) -> None:
         """Block forever handling commands; returns only on interrupt."""
         cfg = self._config
+        BUS.publish(
+            "status",
+            version=__version__,
+            wake_model=cfg.wake_word.model,
+            stt_model=cfg.stt.model_size,
+            intent_model=cfg.intent.model,
+            tts_voice=cfg.tts.voice,
+        )
         self._parser.warm_up()  # preload the LLM so command #1 isn't a cold start
         with MicrophoneStream(cfg.audio) as mic, \
                 WakeWordListener(cfg.wake_word, cfg.audio, mic=mic) as listener:
             self._mic = mic
-            self._speaker.speak("Jarvis is online.")
+            self._say("Jarvis is online.")
             mic.flush()
             try:
                 for detection in listener.stream():
                     log.info("Wake word fired (score=%.3f) — listening for a command",
                              detection.score)
-                    self._handle_command(mic)
-                    mic.flush()  # drop the echo of our own reply
+                    try:
+                        self._handle_command(mic)
+                    finally:
+                        mic.flush()  # drop the echo of our own reply
+                        BUS.publish("state", state="idle")
             finally:
                 self._mic = None
+                BUS.publish("state", state="offline")
 
     # ------------------------------------------------------------------ #
     # One command, end to end
@@ -79,36 +94,51 @@ class Orchestrator:
     def _handle_command(self, mic: MicrophoneStream) -> None:
         """Capture, understand, authorize, execute, and answer one command."""
         mic.flush()  # drop the tail of the wake phrase
+        BUS.publish("state", state="listening")
         self._beep()
 
         utterance = self._capturer.capture(mic)
         if utterance is None:
-            self._speaker.speak("I didn't hear a command.")
+            self._say("I didn't hear a command.")
             return
 
+        BUS.publish("state", state="transcribing")
         text = self._transcriber.transcribe(utterance).text
         if not text.strip():
-            self._speaker.speak("Sorry, I didn't catch that.")
+            self._say("Sorry, I didn't catch that.")
             return
+        BUS.publish("transcript", who="user", text=text)
 
+        BUS.publish("state", state="thinking")
         try:
             intent = self._parser.parse(text)
         except IntentError:
             log.exception("Intent backend unavailable")
-            self._speaker.speak("I can't reach my language model right now.")
+            self._say("I can't reach my language model right now.")
             return
+        BUS.publish(
+            "intent",
+            action=intent.action,
+            params=intent.params,
+            destructive=is_destructive(
+                intent.action, self._config.safety.extra_destructive_actions
+            ),
+        )
 
         verdict = self._gate.authorize(intent)
+        BUS.publish("gate", allowed=verdict.allowed, reason=verdict.reason)
         if not verdict.allowed:
             log.info("Gate refused %r: %s", intent.action, verdict.reason)
             if verdict.reason == "denied by user":
-                self._speaker.speak("Okay, cancelled.")
+                self._say("Okay, cancelled.")
             else:
-                self._speaker.speak("I didn't get a clear yes, so I didn't do it.")
+                self._say("I didn't get a clear yes, so I didn't do it.")
             return
 
+        BUS.publish("state", state="executing")
         result = self._executor.execute(intent)
-        self._speaker.speak(result.message)
+        BUS.publish("result", ok=result.ok, message=result.message)
+        self._say(result.message)
 
     # ------------------------------------------------------------------ #
     # Gate plumbing: speak a prompt, hear the reply
@@ -122,13 +152,22 @@ class Orchestrator:
         if self._mic is None:
             log.error("Confirmation requested with no open microphone — denying")
             return None
-        self._speaker.speak(prompt)
+        self._say(prompt)
+        BUS.publish("state", state="confirming")
         self._mic.flush()  # never transcribe our own prompt
         utterance = self._capturer.capture(self._mic)
         if utterance is None:
             return None
         reply = self._transcriber.transcribe(utterance).text
+        if reply:
+            BUS.publish("transcript", who="user", text=reply)
         return reply or None
+
+    def _say(self, text: str) -> None:
+        """Speak ``text`` and mirror it to the HUD transcript."""
+        BUS.publish("transcript", who="jarvis", text=text)
+        BUS.publish("state", state="speaking")
+        self._speaker.speak(text)
 
     def _beep(self) -> None:
         """Play the listening cue; never let audio-out kill the loop."""

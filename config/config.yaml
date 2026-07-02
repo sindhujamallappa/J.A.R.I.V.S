@@ -77,6 +77,12 @@ tts:
   speaker_id: 0                  # for multi-speaker voices
   volume: 1.0
 
+ui:
+  enabled: true            # serve the local HUD (arc-reactor status + live logs)
+  host: "127.0.0.1"        # loopback only — never expose beyond this machine
+  port: 8765
+  open_browser: true       # open the HUD in the default browser on start
+
 service:
   task_name: "JARVIS Voice Assistant"   # Windows Task Scheduler task name
   restart_on_crash: true                # app-level supervisor restarts on crash

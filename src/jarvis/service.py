@@ -175,12 +175,18 @@ def _supervise(
 
 
 def _run_once(config: Config) -> None:
-    # Imported here so install/uninstall/status (and the tests) work while the
-    # orchestrator/TTS stages are still landing on the roadmap.
+    # Imported here so install/uninstall/status (and the tests) don't pay for
+    # the full pipeline's imports.
     from .orchestrator import Orchestrator
     from .tts.speaker import build_speaker
+    from .ui.server import maybe_start_ui
 
-    Orchestrator(config, speaker=build_speaker(config.tts)).run()
+    ui_server = maybe_start_ui(config.ui)
+    try:
+        Orchestrator(config, speaker=build_speaker(config.tts)).run()
+    finally:
+        if ui_server is not None:
+            ui_server.stop()
 
 
 def run_supervised(config: Config) -> int:

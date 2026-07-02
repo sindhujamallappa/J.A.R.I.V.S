@@ -18,11 +18,18 @@ from pathlib import Path
 from types import TracebackType
 from typing import Iterator, NamedTuple, Optional
 
+import numpy as np
 import openwakeword
 from openwakeword.model import Model
 
 from ..config import AudioConfig, WakeWordConfig, _looks_like_path
+from ..ui.events import BUS
 from ..utils.audio import MicrophoneStream
+
+# Publish a HUD meter tick every Nth frame (~3 Hz at 80 ms frames).
+_METER_EVERY_N_FRAMES = 4
+# int16 RMS that maps to a "full" meter — normal speech peaks around here.
+_METER_FULL_SCALE_RMS = 3000.0
 
 log = logging.getLogger(__name__)
 
@@ -157,9 +164,18 @@ class WakeWordListener:
         if self._model is None or self._mic is None:
             raise RuntimeError("WakeWordListener must be used as a context manager")
 
+        frame_count = 0
         while True:
             frame = self._mic.read()
             score = self._score_frame(frame)
+            frame_count += 1
+            if frame_count % _METER_EVERY_N_FRAMES == 0:
+                rms = float(np.sqrt(np.mean(np.square(frame.astype(np.float32)))))
+                BUS.publish(
+                    "meter",
+                    score=round(score, 4),
+                    level=round(min(1.0, rms / _METER_FULL_SCALE_RMS), 3),
+                )
             now = time.monotonic()
             if score >= self._threshold and (now - self._last_trigger) >= self._cooldown:
                 self._last_trigger = now
