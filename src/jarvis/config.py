@@ -111,7 +111,7 @@ class STTConfig:
 @dataclass(frozen=True)
 class IntentConfig:
     provider: str = "ollama"
-    model: str = "llama3.1"
+    model: str = "llama3.2:3b"
     host: str = "http://localhost:11434"
     timeout_sec: float = 30.0
     temperature: float = 0.0  # deterministic structured output

@@ -1,4 +1,4 @@
-# --- Current stage: config loader + wake word + STT ---
+# --- Current stage: config + wake word + STT + intent + safety + execution ---
 PyYAML>=6.0
 python-dotenv>=1.0
 numpy>=1.24,<2.0        # openWakeWord isn't fully NumPy-2 safe on Windows yet
@@ -6,9 +6,11 @@ sounddevice>=0.4.6      # mic capture; bundles PortAudio (no system install on W
 openwakeword>=0.6.0     # wake word; also pulls scipy, tqdm
 onnxruntime>=1.16       # ONNX inference backend for openWakeWord
 faster-whisper>=1.0     # STT; pulls ctranslate2 + tokenizers
+ollama>=0.3             # intent parsing against the local Ollama server
+send2trash>=1.8         # delete_file -> Recycle Bin (execution.delete_to_trash)
+pycaw>=20240210         # master volume control; pulls comtypes
 
 # --- Later stages (uncomment as each roadmap item lands) ---
-# ollama>=0.3           # intent (or hit the REST API with requests)
 # piper-tts>=1.2        # TTS
 # pyautogui>=0.9        # execution / GUI automation
 

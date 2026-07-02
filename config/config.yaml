@@ -62,7 +62,7 @@ stt:
 
 intent:
   provider: "ollama"
-  model: "llama3.1"        # any Ollama model — e.g. "mistral"; swap freely
+  model: "llama3.2:3b"     # any Ollama model — chosen for CPU-only latency; swap freely
   host: "http://localhost:11434"
   timeout_sec: 30
   temperature: 0.0         # keep low/0 for deterministic JSON
