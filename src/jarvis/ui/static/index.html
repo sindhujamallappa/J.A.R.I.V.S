@@ -565,14 +565,52 @@ const HANDLERS = {
   meter: onMeter,
 };
 
-const es = new EventSource("/events");
-es.onopen = () => { $("conn").classList.add("on"); $("conn-txt").textContent = "ONLINE";
-                    if (document.body.dataset.state === "offline") setState("idle"); };
-es.onerror = () => { $("conn").classList.remove("on"); $("conn-txt").textContent = "OFFLINE"; setState("offline"); };
-es.onmessage = (m) => {
-  try { const e = JSON.parse(m.data); (HANDLERS[e.type] || (() => {}))(e); }
-  catch (err) { /* malformed event — ignore */ }
-};
+/* Demo mode (?demo=1[&state=confirming]): no live connection — populate a
+   canned scene. For presentations and screenshots; the real HUD streams SSE. */
+const DEMO_PARAMS = new URLSearchParams(location.search);
+if (DEMO_PARAMS.has("demo")) {
+  $("conn").classList.add("on"); $("conn-txt").textContent = "DEMO";
+  onStatus({ wake_model: "hey_jarvis", stt_model: "base",
+             intent_model: "llama3.2:3b", tts_voice: "en_US-lessac-medium" });
+  const t = new Date().toLocaleTimeString([], { hour12: false });
+  [["INFO", "ui.server", "HUD available at http://127.0.0.1:8765/"],
+   ["INFO", "tts.speaker", "Piper voice ready (rate=1.00, volume=1.00)"],
+   ["INFO", "stt.transcriber", "Whisper model ready in 8.3s"],
+   ["INFO", "intent.parser", "Intent model 'llama3.2:3b' warmed up (prompt cache primed)"],
+   ["INFO", "utils.audio", "Microphone open (rate=16000 Hz, frame=1280, channels=1, device=2)"],
+   ["INFO", "wake_word.listener", "Wake-word listener ready — say 'Hey Jarvis'"],
+   ["INFO", "wake_word.listener", "Wake word detected (score=0.871)"],
+   ["INFO", "orchestrator", "Wake word fired (score=0.871) — listening for a command"],
+  ].forEach(([level, logger, msg]) => onLog({ level, logger, msg, t }));
+  addMsg("jarvis", "Jarvis is online.");
+  const scene = DEMO_PARAMS.get("state") || "listening";
+  if (scene === "confirming") {
+    addMsg("user", "Delete the file report.txt from my desktop");
+    onIntent({ action: "delete_file", params: { path: "Desktop/report.txt" }, destructive: true });
+    addMsg("jarvis", "This will delete the file Desktop/report.txt. Should I proceed? Say yes or no.");
+    onLog({ level: "INFO", logger: "safety.gate", t,
+            msg: "Destructive action 'delete_file' — requesting confirmation: delete the file Desktop/report.txt" });
+  } else {
+    addMsg("user", "What time is it?");
+    onIntent({ action: "get_time", params: {}, destructive: false });
+    onGate({ allowed: true, reason: "non-destructive" });
+    onResult({ ok: true, message: "It's 11:42 AM on Thursday, July 2." });
+    addMsg("jarvis", "It's 11:42 AM on Thursday, July 2.");
+    onLog({ level: "INFO", logger: "orchestrator", t,
+            msg: "Command timing: capture=1.62s stt=0.81s intent=0.00s gate=0.00s exec=0.01s speak=1.94s (total 4.38s)" });
+  }
+  setState(scene);
+  setInterval(() => { agitationTarget = Math.max(agitationTarget, 0.45); }, 300);
+} else {
+  const es = new EventSource("/events");
+  es.onopen = () => { $("conn").classList.add("on"); $("conn-txt").textContent = "ONLINE";
+                      if (document.body.dataset.state === "offline") setState("idle"); };
+  es.onerror = () => { $("conn").classList.remove("on"); $("conn-txt").textContent = "OFFLINE"; setState("offline"); };
+  es.onmessage = (m) => {
+    try { const e = JSON.parse(m.data); (HANDLERS[e.type] || (() => {}))(e); }
+    catch (err) { /* malformed event — ignore */ }
+  };
+}
 
 /* clock + uptime */
 const t0 = Date.now();
