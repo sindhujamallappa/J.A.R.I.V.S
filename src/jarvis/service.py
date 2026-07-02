@@ -34,8 +34,6 @@ from typing import Callable, Optional
 from xml.sax.saxutils import escape
 
 from .config import Config, ServiceConfig, load_config
-from .orchestrator import Orchestrator
-from .tts.speaker import build_speaker
 from .utils.logging_config import configure_logging
 
 log = logging.getLogger(__name__)
@@ -177,6 +175,11 @@ def _supervise(
 
 
 def _run_once(config: Config) -> None:
+    # Imported here so install/uninstall/status (and the tests) work while the
+    # orchestrator/TTS stages are still landing on the roadmap.
+    from .orchestrator import Orchestrator
+    from .tts.speaker import build_speaker
+
     Orchestrator(config, speaker=build_speaker(config.tts)).run()
 
 
