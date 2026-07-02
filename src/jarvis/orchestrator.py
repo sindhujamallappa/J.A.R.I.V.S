@@ -75,6 +75,7 @@ class Orchestrator:
             self._mic = mic
             self._say("Jarvis is online.")
             mic.flush()
+            BUS.publish("state", state="idle")  # the HUD otherwise sticks on 'speaking'
             try:
                 for detection in listener.stream():
                     log.info("Wake word fired (score=%.3f) — listening for a command",

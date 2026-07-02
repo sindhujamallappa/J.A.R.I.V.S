@@ -30,6 +30,10 @@ from ..utils.audio import MicrophoneStream
 _METER_EVERY_N_FRAMES = 4
 # int16 RMS that maps to a "full" meter — normal speech peaks around here.
 _METER_FULL_SCALE_RMS = 3000.0
+# Log (throttled) when a score lands here-to-threshold: helps tune the
+# threshold and proves the mic hears *something* wake-word-shaped.
+_NEAR_MISS_FLOOR = 0.2
+_NEAR_MISS_LOG_INTERVAL_SEC = 2.0
 
 log = logging.getLogger(__name__)
 
@@ -108,6 +112,7 @@ class WakeWordListener:
         self._mic: Optional[MicrophoneStream] = None
         self._owns_mic = mic is None
         self._last_trigger = 0.0
+        self._last_near_miss = 0.0
 
     @staticmethod
     def _expected_score_key(model: str) -> str:
@@ -182,6 +187,16 @@ class WakeWordListener:
                 self._model.reset()  # clear buffers to prevent immediate re-fire
                 log.info("Wake word detected (score=%.3f)", score)
                 yield WakeWordDetection(self._score_key, score)
+            elif (
+                score >= _NEAR_MISS_FLOOR
+                and (now - self._last_near_miss) >= _NEAR_MISS_LOG_INTERVAL_SEC
+            ):
+                self._last_near_miss = now
+                log.info(
+                    "Near miss: wake score %.2f below threshold %.2f — "
+                    "speak closer/clearer, or lower wake_word.threshold",
+                    score, self._threshold,
+                )
 
     def wait(self) -> WakeWordDetection:
         """Block until the wake word is detected once, then return.

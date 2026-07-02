@@ -16,7 +16,7 @@ audio:
   sample_rate: 16000       # required by openWakeWord AND faster-whisper — leave at 16k
   frame_length: 1280       # 80 ms @ 16 kHz — openWakeWord's expected chunk size
   channels: 1              # mono
-  input_device: null       # null = system default; int index or name substring to pin a mic
+  input_device: "Microphone Array"  # pin the laptop mic (Windows default was a headset dongle); null = system default
 
 wake_word:
   model: "hey_jarvis"            # bundled openWakeWord model name, OR a path to a custom .onnx/.tflite
