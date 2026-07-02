@@ -120,6 +120,9 @@ class IntentConfig:
     # (30s+) reload.
     keep_alive: str = "30m"
     max_tokens: int = 256      # intent JSON is small; cap runaway generations
+    # Regex fast path for common commands — skips the LLM entirely (instant).
+    # Matches only non-destructive phrasings; everything else goes to the LLM.
+    fast_path: bool = True
 
 
 @dataclass(frozen=True)

@@ -81,10 +81,12 @@ class IntentParser:
         self._system_prompt = _build_system_prompt()
 
     def warm_up(self) -> bool:
-        """Preload the model into server RAM (first cold load can take 30s+).
+        """Preload the model AND prime the prompt cache (first load takes 30s+).
 
-        Call once at startup so the first spoken command doesn't eat the
-        load latency — or time out entirely.
+        Sending the real system prompt here matters: llama.cpp caches the
+        longest common prompt prefix between requests, so after this call a
+        real parse only evaluates the user's short command instead of the
+        whole catalog prompt — several seconds saved per command on CPU.
 
         Returns:
             True if the backend responded; False (logged) otherwise.
@@ -92,11 +94,15 @@ class IntentParser:
         try:
             self._client.chat(
                 model=self._cfg.model,
-                messages=[{"role": "user", "content": "ping"}],
+                messages=[
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": "warm up"},
+                ],
+                format="json",
                 options={"num_predict": 1},
                 keep_alive=self._cfg.keep_alive,
             )
-            log.info("Intent model %r warmed up", self._cfg.model)
+            log.info("Intent model %r warmed up (prompt cache primed)", self._cfg.model)
             return True
         except Exception as exc:  # noqa: BLE001 — startup should not crash
             log.warning("Intent model warm-up failed: %s", exc)
@@ -117,6 +123,14 @@ class IntentParser:
         """
         if not text.strip():
             return Intent("unknown", {"reason": "empty transcript"}, text)
+
+        if self._cfg.fast_path:
+            from .fast_path import match as fast_match
+
+            fast = fast_match(text)
+            if fast is not None:
+                log.info("Intent (fast path): %r -> %s %s", text, fast.action, fast.params)
+                return fast
 
         try:
             response = self._client.chat(

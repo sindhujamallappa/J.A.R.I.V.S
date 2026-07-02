@@ -94,52 +94,72 @@ class Orchestrator:
     # ------------------------------------------------------------------ #
     def _handle_command(self, mic: MicrophoneStream) -> None:
         """Capture, understand, authorize, execute, and answer one command."""
-        mic.flush()  # drop the tail of the wake phrase
-        BUS.publish("state", state="listening")
-        self._beep()
+        import time as _time
 
-        utterance = self._capturer.capture(mic)
-        if utterance is None:
-            self._say("I didn't hear a command.")
-            return
+        timings: dict[str, float] = {}
 
-        BUS.publish("state", state="transcribing")
-        text = self._transcriber.transcribe(utterance).text
-        if not text.strip():
-            self._say("Sorry, I didn't catch that.")
-            return
-        BUS.publish("transcript", who="user", text=text)
+        def _timed(stage: str, fn):  # noqa: ANN001, ANN202 — tiny local helper
+            start = _time.perf_counter()
+            try:
+                return fn()
+            finally:
+                timings[stage] = _time.perf_counter() - start
 
-        BUS.publish("state", state="thinking")
         try:
-            intent = self._parser.parse(text)
-        except IntentError:
-            log.exception("Intent backend unavailable")
-            self._say("I can't reach my language model right now.")
-            return
-        BUS.publish(
-            "intent",
-            action=intent.action,
-            params=intent.params,
-            destructive=is_destructive(
-                intent.action, self._config.safety.extra_destructive_actions
-            ),
-        )
+            mic.flush()  # drop the tail of the wake phrase
+            BUS.publish("state", state="listening")
+            self._beep()
 
-        verdict = self._gate.authorize(intent)
-        BUS.publish("gate", allowed=verdict.allowed, reason=verdict.reason)
-        if not verdict.allowed:
-            log.info("Gate refused %r: %s", intent.action, verdict.reason)
-            if verdict.reason == "denied by user":
-                self._say("Okay, cancelled.")
-            else:
-                self._say("I didn't get a clear yes, so I didn't do it.")
-            return
+            utterance = _timed("capture", lambda: self._capturer.capture(mic))
+            if utterance is None:
+                self._say("I didn't hear a command.")
+                return
 
-        BUS.publish("state", state="executing")
-        result = self._executor.execute(intent)
-        BUS.publish("result", ok=result.ok, message=result.message)
-        self._say(result.message)
+            BUS.publish("state", state="transcribing")
+            text = _timed("stt", lambda: self._transcriber.transcribe(utterance).text)
+            if not text.strip():
+                self._say("Sorry, I didn't catch that.")
+                return
+            BUS.publish("transcript", who="user", text=text)
+
+            BUS.publish("state", state="thinking")
+            try:
+                intent = _timed("intent", lambda: self._parser.parse(text))
+            except IntentError:
+                log.exception("Intent backend unavailable")
+                self._say("I can't reach my language model right now.")
+                return
+            BUS.publish(
+                "intent",
+                action=intent.action,
+                params=intent.params,
+                destructive=is_destructive(
+                    intent.action, self._config.safety.extra_destructive_actions
+                ),
+            )
+
+            # Gate time includes the spoken yes/no round trip when destructive.
+            verdict = _timed("gate", lambda: self._gate.authorize(intent))
+            BUS.publish("gate", allowed=verdict.allowed, reason=verdict.reason)
+            if not verdict.allowed:
+                log.info("Gate refused %r: %s", intent.action, verdict.reason)
+                if verdict.reason == "denied by user":
+                    self._say("Okay, cancelled.")
+                else:
+                    self._say("I didn't get a clear yes, so I didn't do it.")
+                return
+
+            BUS.publish("state", state="executing")
+            result = _timed("exec", lambda: self._executor.execute(intent))
+            BUS.publish("result", ok=result.ok, message=result.message)
+            _timed("speak", lambda: self._say(result.message))
+        finally:
+            if timings:
+                log.info(
+                    "Command timing: %s (total %.2fs)",
+                    " ".join(f"{k}={v:.2f}s" for k, v in timings.items()),
+                    sum(timings.values()),
+                )
 
     # ------------------------------------------------------------------ #
     # Gate plumbing: speak a prompt, hear the reply

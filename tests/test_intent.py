@@ -11,7 +11,10 @@ from jarvis.actions import ACTIONS, is_destructive
 from jarvis.config import IntentConfig
 from jarvis.intent.parser import IntentError, IntentParser
 
-CFG = IntentConfig()
+# These tests exercise the LLM path and its validation; the regex fast path
+# (tested in test_fast_path.py) would intercept simple phrases before the
+# mocked client is ever consulted.
+CFG = IntentConfig(fast_path=False)
 
 
 class FakeClient:

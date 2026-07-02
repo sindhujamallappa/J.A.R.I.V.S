@@ -68,6 +68,7 @@ intent:
   temperature: 0.0         # keep low/0 for deterministic JSON
   keep_alive: "30m"        # keep the model in RAM between commands (voice latency)
   max_tokens: 256          # cap on generated intent JSON
+  fast_path: true          # instant regex matcher for common commands; LLM handles the rest
 
 tts:
   engine: "piper"
