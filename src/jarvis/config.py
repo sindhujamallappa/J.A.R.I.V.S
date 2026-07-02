@@ -113,8 +113,13 @@ class IntentConfig:
     provider: str = "ollama"
     model: str = "llama3.2:3b"
     host: str = "http://localhost:11434"
-    timeout_sec: float = 30.0
-    temperature: float = 0.0  # deterministic structured output
+    timeout_sec: float = 60.0  # must cover a cold model load, not just inference
+    temperature: float = 0.0   # deterministic structured output
+    # How long Ollama keeps the model in RAM after a request. Without this the
+    # model unloads after ~5 idle minutes and the next command hits a cold
+    # (30s+) reload.
+    keep_alive: str = "30m"
+    max_tokens: int = 256      # intent JSON is small; cap runaway generations
 
 
 @dataclass(frozen=True)
@@ -326,6 +331,10 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("intent.timeout_sec must be > 0")
     if not 0.0 <= cfg.intent.temperature <= 2.0:
         raise ConfigError("intent.temperature must be in [0.0, 2.0]")
+    if not cfg.intent.keep_alive.strip():
+        raise ConfigError("intent.keep_alive must not be empty")
+    if cfg.intent.max_tokens < 32:
+        raise ConfigError("intent.max_tokens must be >= 32")
 
     stt = cfg.stt
     if not stt.model_size.strip():

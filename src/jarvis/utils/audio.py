@@ -23,6 +23,26 @@ from ..config import AudioConfig
 log = logging.getLogger(__name__)
 
 
+def play_tone(
+    frequency_hz: float = 880.0,
+    duration_sec: float = 0.12,
+    volume: float = 0.2,
+    sample_rate: int = 16000,
+) -> None:
+    """Play a short sine 'earcon' (listening cue); blocks until done.
+
+    Classification: audio output only — non-destructive.
+    """
+    t = np.linspace(0.0, duration_sec, int(sample_rate * duration_sec), endpoint=False)
+    tone = np.sin(2.0 * np.pi * frequency_hz * t) * volume
+    # Fade edges to avoid clicks.
+    fade = max(1, min(len(tone) // 10, int(0.01 * sample_rate)))
+    envelope = np.ones_like(tone)
+    envelope[:fade] = np.linspace(0.0, 1.0, fade)
+    envelope[-fade:] = np.linspace(1.0, 0.0, fade)
+    sd.play((tone * envelope * 32767).astype(np.int16), samplerate=sample_rate, blocking=True)
+
+
 def resolve_input_device(device: Optional[str]) -> Optional[int]:
     """Resolve a device spec to a sounddevice input-device index.
 
@@ -113,6 +133,25 @@ class MicrophoneStream:
             return data.reshape(-1)
         # Downmix to mono without overflowing int16.
         return data.mean(axis=1).astype(np.int16)
+
+    def flush(self) -> None:
+        """Discard everything currently buffered so the next read is live.
+
+        Call after TTS playback (the mic hears the speakers) or any long
+        pause in reading — otherwise stale audio, including the assistant's
+        own voice, is what gets captured next.
+
+        Raises:
+            RuntimeError: If called outside the context manager.
+        """
+        if self._stream is None:
+            raise RuntimeError("MicrophoneStream must be used as a context manager")
+        dropped = 0
+        while self._stream.read_available >= self._frame_length:
+            self._stream.read(self._frame_length)
+            dropped += 1
+        if dropped:
+            log.debug("Flushed %d stale audio frame(s)", dropped)
 
     def __exit__(
         self,

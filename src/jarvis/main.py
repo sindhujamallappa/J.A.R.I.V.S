@@ -1,11 +1,13 @@
 """J.A.R.I.V.S entrypoint.
 
-Builds config + logging and runs the pipeline. As of this stage only the
-wake-word listener is wired up; STT / intent / safety / execution / TTS get
-attached to the orchestrator as they land on the roadmap.
+Builds config + logging, then runs the full voice pipeline:
+wake word → STT → intent → safety gate → execution → TTS.
 
 Run:
     python -m src.jarvis.main
+
+For the supervised background-service form (auto-restart, single instance),
+use ``python -m src.jarvis.service run`` instead.
 """
 
 from __future__ import annotations
@@ -14,8 +16,9 @@ import logging
 import sys
 
 from .config import ConfigError, load_config
+from .orchestrator import Orchestrator
+from .tts.speaker import build_speaker
 from .utils.logging_config import configure_logging
-from .wake_word.listener import WakeWordListener
 
 log = logging.getLogger("jarvis")
 
@@ -33,14 +36,7 @@ def main() -> int:
     log.info("Starting %s", "J.A.R.I.V.S")
 
     try:
-        with WakeWordListener(cfg.wake_word, cfg.audio) as ww:
-            for detection in ww.stream():
-                # TODO(orchestrator): hand off to STT -> intent -> safety -> exec -> TTS
-                log.info(
-                    "Wake word '%s' fired (score=%.3f) — pipeline continues here",
-                    detection.model_name,
-                    detection.score,
-                )
+        Orchestrator(cfg, speaker=build_speaker(cfg.tts)).run()
     except KeyboardInterrupt:
         log.info("Shutdown requested — goodbye")
     except Exception:  # noqa: BLE001 — top-level guard for graceful exit

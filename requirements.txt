@@ -9,9 +9,9 @@ faster-whisper>=1.0     # STT; pulls ctranslate2 + tokenizers
 ollama>=0.3             # intent parsing against the local Ollama server
 send2trash>=1.8         # delete_file -> Recycle Bin (execution.delete_to_trash)
 pycaw>=20240210         # master volume control; pulls comtypes
+piper-tts>=1.3          # offline TTS (piper1-gpl; ships Windows wheels)
 
 # --- Later stages (uncomment as each roadmap item lands) ---
-# piper-tts>=1.2        # TTS
 # pyautogui>=0.9        # execution / GUI automation
 
 # --- Optional extras ---

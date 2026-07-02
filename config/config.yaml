@@ -64,8 +64,10 @@ intent:
   provider: "ollama"
   model: "llama3.2:3b"     # any Ollama model — chosen for CPU-only latency; swap freely
   host: "http://localhost:11434"
-  timeout_sec: 30
+  timeout_sec: 60          # must cover a cold model load, not just inference
   temperature: 0.0         # keep low/0 for deterministic JSON
+  keep_alive: "30m"        # keep the model in RAM between commands (voice latency)
+  max_tokens: 256          # cap on generated intent JSON
 
 tts:
   engine: "piper"

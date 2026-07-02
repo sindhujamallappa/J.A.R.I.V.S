@@ -80,6 +80,28 @@ class IntentParser:
         )
         self._system_prompt = _build_system_prompt()
 
+    def warm_up(self) -> bool:
+        """Preload the model into server RAM (first cold load can take 30s+).
+
+        Call once at startup so the first spoken command doesn't eat the
+        load latency — or time out entirely.
+
+        Returns:
+            True if the backend responded; False (logged) otherwise.
+        """
+        try:
+            self._client.chat(
+                model=self._cfg.model,
+                messages=[{"role": "user", "content": "ping"}],
+                options={"num_predict": 1},
+                keep_alive=self._cfg.keep_alive,
+            )
+            log.info("Intent model %r warmed up", self._cfg.model)
+            return True
+        except Exception as exc:  # noqa: BLE001 — startup should not crash
+            log.warning("Intent model warm-up failed: %s", exc)
+            return False
+
     def parse(self, text: str) -> Intent:
         """Map one transcript to a validated intent.
 
@@ -104,7 +126,11 @@ class IntentParser:
                     {"role": "user", "content": text},
                 ],
                 format="json",
-                options={"temperature": self._cfg.temperature},
+                options={
+                    "temperature": self._cfg.temperature,
+                    "num_predict": self._cfg.max_tokens,
+                },
+                keep_alive=self._cfg.keep_alive,
             )
         except Exception as exc:
             raise IntentError(f"Ollama request failed: {exc}") from exc

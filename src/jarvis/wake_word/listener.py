@@ -78,14 +78,28 @@ class WakeWordListener:
                 ...
     """
 
-    def __init__(self, cfg: WakeWordConfig, audio: AudioConfig) -> None:
+    def __init__(
+        self,
+        cfg: WakeWordConfig,
+        audio: AudioConfig,
+        mic: Optional[MicrophoneStream] = None,
+    ) -> None:
+        """Args:
+            cfg: Wake-word configuration.
+            audio: Audio/frame configuration.
+            mic: An already-open microphone stream to share (the orchestrator
+                passes one so STT capture reads the same device). ``None``
+                means the listener opens and owns its own.
+        """
         self._cfg = cfg
         self._audio = audio
         self._threshold = cfg.threshold
         self._cooldown = cfg.trigger_cooldown_sec
         self._score_key = self._expected_score_key(cfg.model)
         self._model: Optional[Model] = None
+        self._external_mic = mic
         self._mic: Optional[MicrophoneStream] = None
+        self._owns_mic = mic is None
         self._last_trigger = 0.0
 
     @staticmethod
@@ -113,7 +127,10 @@ class WakeWordListener:
 
     def __enter__(self) -> "WakeWordListener":
         self._model = self._build_model()
-        self._mic = MicrophoneStream(self._audio).__enter__()
+        if self._external_mic is not None:
+            self._mic = self._external_mic
+        else:
+            self._mic = MicrophoneStream(self._audio).__enter__()
         log.info("Wake-word listener ready — say 'Hey Jarvis'")
         return self
 
@@ -165,7 +182,8 @@ class WakeWordListener:
         tb: Optional[TracebackType],
     ) -> None:
         if self._mic is not None:
-            self._mic.__exit__(exc_type, exc, tb)
+            if self._owns_mic:
+                self._mic.__exit__(exc_type, exc, tb)
             self._mic = None
         self._model = None
         log.info("Wake-word listener stopped")
