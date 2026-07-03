@@ -19,7 +19,13 @@ audio:
   input_device: "Microphone Array"  # pin the laptop mic (Windows default was a headset dongle); null = system default
 
 wake_word:
-  model: "hey_jarvis"            # bundled openWakeWord model name, OR a path to a custom .onnx/.tflite
+  # Wake models listened for simultaneously — ANY of them triggers.
+  # Each entry is a bundled openWakeWord model name OR a path to a custom
+  # .onnx/.tflite. NOTE: wake phrases are trained MODELS, not free text —
+  # adding a phrase like "wake up mommys home" means training a model for it
+  # (openWakeWord's synthetic-data pipeline), then listing the file here:
+  #   models: ["hey_jarvis", "models/wake/wake_up_mommys_home.onnx"]
+  models: ["hey_jarvis"]
   threshold: 0.5                 # detection score in [0,1] to trigger; raise to cut false positives
   inference_framework: "onnx"    # onnx | tflite  (onnx installs cleanly on Windows)
   vad_threshold: 0.0             # silero VAD gate in [0,1]; 0 disables. e.g. 0.5 to require speech

@@ -48,7 +48,11 @@ class AudioConfig:
 
 @dataclass(frozen=True)
 class WakeWordConfig:
-    model: str = "hey_jarvis"
+    # Wake models listened for simultaneously — any of them triggers. Each
+    # entry is a bundled openWakeWord model name (e.g. "hey_jarvis") or a
+    # path to a custom-trained .onnx/.tflite. Phrases are MODELS, not text:
+    # a new phrase requires training a model for it.
+    models: tuple[str, ...] = ("hey_jarvis",)
     threshold: float = 0.5
     inference_framework: str = "onnx"
     vad_threshold: float = 0.0
@@ -174,7 +178,11 @@ class Config:
 _ENV_OVERRIDES: dict[str, tuple[Any, ...]] = {
     "JARVIS_LOG_LEVEL": ("logging", "level"),
     "JARVIS_LOG_FILE": ("logging", "file"),
-    "JARVIS_WAKE_MODEL": ("wake_word", "model"),
+    # Comma-separated list, e.g. "hey_jarvis,models/wake/custom.onnx"
+    "JARVIS_WAKE_MODELS": (
+        "wake_word", "models",
+        lambda s: tuple(m.strip() for m in s.split(",") if m.strip()),
+    ),
     "JARVIS_WAKE_THRESHOLD": ("wake_word", "threshold", float),
     "JARVIS_INTENT_HOST": ("intent", "host"),
     "JARVIS_INTENT_MODEL": ("intent", "model"),
@@ -393,13 +401,16 @@ def _validate(cfg: Config) -> None:
     if svc.restart_backoff_max_sec < svc.restart_backoff_sec:
         raise ConfigError("service.restart_backoff_max_sec must be >= restart_backoff_sec")
 
-    # If a custom wake-word model file is configured (looks like a path), it
-    # must exist. Bare bundled names (e.g. "hey_jarvis") are resolved/downloaded
-    # by the listener, so we don't check those here.
-    if _looks_like_path(ww.model):
-        model_path = Path(ww.model)
-        if not model_path.is_file():
-            raise ConfigError(f"wake_word.model file not found: {model_path.resolve()}")
+    # Every configured wake model must be usable: custom files (anything that
+    # looks like a path) must exist; bare bundled names (e.g. "hey_jarvis")
+    # are resolved/downloaded by the listener, so we don't check those here.
+    if not ww.models or not any(str(m).strip() for m in ww.models):
+        raise ConfigError("wake_word.models must list at least one model")
+    for model in ww.models:
+        if _looks_like_path(model):
+            model_path = Path(model)
+            if not model_path.is_file():
+                raise ConfigError(f"wake_word.models file not found: {model_path.resolve()}")
 
 
 def _looks_like_path(model: str) -> bool:

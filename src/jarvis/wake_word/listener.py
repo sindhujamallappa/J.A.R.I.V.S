@@ -45,26 +45,27 @@ class WakeWordDetection(NamedTuple):
     score: float
 
 
-def _ensure_models_available(model: str) -> None:
-    """Ensure openWakeWord's shared feature models (and a bundled wake model,
-    if named) are downloaded locally.
+def _ensure_models_available(models: tuple[str, ...]) -> None:
+    """Ensure openWakeWord's shared feature models (and any bundled wake
+    models named) are downloaded locally.
 
     openWakeWord always needs its shared melspectrogram / embedding / VAD
-    models. A bundled wake model (e.g. ``hey_jarvis``) is fetched by name;
+    models. Bundled wake models (e.g. ``hey_jarvis``) are fetched by name;
     custom model files are the caller's responsibility (validated in config).
 
     Network is only used on first run; subsequent starts are fully offline.
     """
+    bundled = [m for m in models if not _looks_like_path(m)]
     try:
-        if _looks_like_path(model):
-            # Custom file: only the shared feature models are needed.
-            openwakeword.utils.download_models()
-        else:
+        if bundled:
             try:
-                openwakeword.utils.download_models(model_names=[model])
+                openwakeword.utils.download_models(model_names=bundled)
             except TypeError:
                 # Older openWakeWord: no model_names kwarg.
                 openwakeword.utils.download_models()
+        else:
+            # Custom files only: just the shared feature models are needed.
+            openwakeword.utils.download_models()
     except Exception as exc:  # network down, host unreachable, etc.
         log.warning(
             "Could not verify/download openWakeWord models (%s). "
@@ -106,7 +107,8 @@ class WakeWordListener:
         self._audio = audio
         self._threshold = cfg.threshold
         self._cooldown = cfg.trigger_cooldown_sec
-        self._score_key = self._expected_score_key(cfg.model)
+        # Score-dict keys for each configured model, in config order.
+        self._score_keys = [self._expected_score_key(m) for m in cfg.models]
         self._model: Optional[Model] = None
         self._external_mic = mic
         self._mic: Optional[MicrophoneStream] = None
@@ -122,16 +124,15 @@ class WakeWordListener:
         return model
 
     def _build_model(self) -> Model:
-        _ensure_models_available(self._cfg.model)
-        wakeword_models = [self._cfg.model]  # bundled name or file path
+        _ensure_models_available(self._cfg.models)
         log.info(
-            "Loading wake-word model '%s' (framework=%s, threshold=%.2f)",
-            self._cfg.model,
+            "Loading wake-word model(s) %s (framework=%s, threshold=%.2f)",
+            ", ".join(repr(m) for m in self._cfg.models),
             self._cfg.inference_framework,
             self._threshold,
         )
         return Model(
-            wakeword_models=wakeword_models,
+            wakeword_models=list(self._cfg.models),  # names and/or file paths
             inference_framework=self._cfg.inference_framework,
             vad_threshold=self._cfg.vad_threshold,
             enable_speex_noise_suppression=self._cfg.enable_noise_suppression,
@@ -143,17 +144,23 @@ class WakeWordListener:
             self._mic = self._external_mic
         else:
             self._mic = MicrophoneStream(self._audio).__enter__()
-        log.info("Wake-word listener ready — say 'Hey Jarvis'")
+        log.info("Wake-word listener ready — %d wake phrase(s) armed", len(self._score_keys))
         return self
 
-    def _score_frame(self, frame) -> float:
-        """Run one frame through the model and return our model's score."""
+    def _score_frame(self, frame) -> tuple[str, float]:
+        """Run one frame through the models; return the best (name, score)."""
         assert self._model is not None
         scores = self._model.predict(frame)
-        if self._score_key in scores:
-            return float(scores[self._score_key])
-        # Fallback: single model loaded, take the max score present.
-        return float(max(scores.values())) if scores else 0.0
+        best_key, best = "", 0.0
+        for key in self._score_keys:
+            value = float(scores.get(key, 0.0))
+            if value >= best:
+                best_key, best = key, value
+        if not best_key and scores:
+            # Fallback: key mismatch (openWakeWord renamed it) — take the max.
+            best_key = max(scores, key=scores.get)  # type: ignore[arg-type]
+            best = float(scores[best_key])
+        return best_key, best
 
     def stream(self) -> Iterator[WakeWordDetection]:
         """Yield a :class:`WakeWordDetection` each time the wake word fires.
@@ -172,7 +179,7 @@ class WakeWordListener:
         frame_count = 0
         while True:
             frame = self._mic.read()
-            score = self._score_frame(frame)
+            name, score = self._score_frame(frame)
             frame_count += 1
             if frame_count % _METER_EVERY_N_FRAMES == 0:
                 rms = float(np.sqrt(np.mean(np.square(frame.astype(np.float32)))))
@@ -185,17 +192,17 @@ class WakeWordListener:
             if score >= self._threshold and (now - self._last_trigger) >= self._cooldown:
                 self._last_trigger = now
                 self._model.reset()  # clear buffers to prevent immediate re-fire
-                log.info("Wake word detected (score=%.3f)", score)
-                yield WakeWordDetection(self._score_key, score)
+                log.info("Wake word %r detected (score=%.3f)", name, score)
+                yield WakeWordDetection(name, score)
             elif (
                 score >= _NEAR_MISS_FLOOR
                 and (now - self._last_near_miss) >= _NEAR_MISS_LOG_INTERVAL_SEC
             ):
                 self._last_near_miss = now
                 log.info(
-                    "Near miss: wake score %.2f below threshold %.2f — "
+                    "Near miss: %r scored %.2f below threshold %.2f — "
                     "speak closer/clearer, or lower wake_word.threshold",
-                    score, self._threshold,
+                    name, score, self._threshold,
                 )
 
     def wait(self) -> WakeWordDetection:

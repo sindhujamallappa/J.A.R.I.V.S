@@ -64,7 +64,7 @@ class Orchestrator:
         BUS.publish(
             "status",
             version=__version__,
-            wake_model=cfg.wake_word.model,
+            wake_model=", ".join(cfg.wake_word.models),
             stt_model=cfg.stt.model_size,
             intent_model=cfg.intent.model,
             tts_voice=cfg.tts.voice,
