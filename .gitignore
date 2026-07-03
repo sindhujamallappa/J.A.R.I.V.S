@@ -14,9 +14,14 @@ env/
 # Environment / secrets
 .env
 
-# Local model files (downloaded on setup) and runtime logs
+# Local model files (downloaded on setup) and runtime logs.
+# Exception: custom-trained wake-word models are part of this setup — keep them.
 models/*
 !models/.gitkeep
+!models/wake/
+models/wake/*
+!models/wake/.gitkeep
+!models/wake/*.onnx
 logs/*
 !logs/.gitkeep
 
