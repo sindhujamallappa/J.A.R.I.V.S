@@ -43,8 +43,18 @@ def play_tone(
     sd.play((tone * envelope * 32767).astype(np.int16), samplerate=sample_rate, blocking=True)
 
 
+# Windows exposes each physical device through several host APIs. Prefer the
+# ones PortAudio's blocking reads work with; WDM-KS (last) fails with
+# "Blocking API not supported yet".
+_HOSTAPI_PRIORITY = ("MME", "Windows WASAPI", "Windows DirectSound")
+
+
 def resolve_input_device(device: Optional[str]) -> Optional[int]:
     """Resolve a device spec to a sounddevice input-device index.
+
+    Name matches are ranked by host API (MME > WASAPI > DirectSound > rest),
+    because Windows lists the same microphone once per API and not all of
+    them support blocking capture.
 
     Args:
         device: ``None`` for the system default, an int-like string for a
@@ -66,11 +76,30 @@ def resolve_input_device(device: Optional[str]) -> Optional[int]:
         pass
 
     needle = str(device).lower()
+    hostapis = sd.query_hostapis()
+    candidates: list[tuple[int, int, str, str]] = []
     for idx, info in enumerate(sd.query_devices()):
         if info.get("max_input_channels", 0) > 0 and needle in info["name"].lower():
-            log.info("Resolved input device %r -> [%d] %s", device, idx, info["name"])
-            return idx
-    raise ValueError(f"No input device matching {device!r}")
+            api = hostapis[info["hostapi"]]["name"]
+            rank = (_HOSTAPI_PRIORITY.index(api)
+                    if api in _HOSTAPI_PRIORITY else len(_HOSTAPI_PRIORITY))
+            candidates.append((rank, idx, info["name"], api))
+    if not candidates:
+        raise ValueError(f"No input device matching {device!r}")
+    _, idx, name, api = min(candidates)
+    if api == "Windows WDM-KS":
+        # Bluetooth-only headsets often expose capture solely via WDM-KS,
+        # which PortAudio can't read in blocking mode. A crashed assistant
+        # helps nobody — fall back to the default mic, loudly.
+        log.warning(
+            "Input device %r only matches unsupported WDM-KS endpoint(s) "
+            "(Bluetooth-only headset? USB dongle unplugged?) — "
+            "falling back to the system default microphone",
+            device,
+        )
+        return None
+    log.info("Resolved input device %r -> [%d] %s (%s)", device, idx, name, api)
+    return idx
 
 
 class MicrophoneStream:

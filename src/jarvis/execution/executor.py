@@ -292,8 +292,17 @@ class Executor:
     # ------------------------------------------------------------------ #
     def _volume_endpoint(self):
         """COM endpoint for the default audio output (needs pycaw)."""
+        import comtypes
         from comtypes import CLSCTX_ALL
         from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+        try:
+            # COM may be uninitialized (or initialized to a different model
+            # by the audio stack) in this thread; without this, pycaw fails
+            # with "Volume control isn't available".
+            comtypes.CoInitialize()
+        except OSError:
+            pass  # already initialized in an incompatible mode — still usable
 
         device = AudioUtilities.GetSpeakers()
         interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)

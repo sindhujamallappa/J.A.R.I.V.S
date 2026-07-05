@@ -16,7 +16,7 @@ audio:
   sample_rate: 16000       # required by openWakeWord AND faster-whisper — leave at 16k
   frame_length: 1280       # 80 ms @ 16 kHz — openWakeWord's expected chunk size
   channels: 1              # mono
-  input_device: "Microphone Array"  # pin the laptop mic (Windows default was a headset dongle); null = system default
+  input_device: "Jabra"    # headset mic (Link 390 dongle). Laptop mic: "Microphone Array"; null = system default
 
 wake_word:
   # Wake models listened for simultaneously — ANY of them triggers.
@@ -58,7 +58,7 @@ stt:
   beam_size: 1             # 1 = greedy (fastest); raise for accuracy
   # utterance capture / silence endpointing (int16 RMS domain)
   min_rms_threshold: 100   # noise-floor guard for speech onset (this laptop's mic array is quiet: ambient ~26)
-  speech_multiplier: 2.5   # onset threshold = max(min_rms, ambient * this)
+  speech_multiplier: 2.0   # onset threshold = max(min_rms, ambient * this); 2.5 overshot in noisy rooms
   calibration_sec: 0.3     # ambient-noise sampling window at capture start
   silence_duration_sec: 0.8  # trailing silence that ends the utterance
   max_duration_sec: 15.0   # hard cap on a single command
