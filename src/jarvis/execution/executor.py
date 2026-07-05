@@ -27,14 +27,19 @@ import urllib.parse
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Optional, Sequence
 
-from ..config import ExecutionConfig
+from ..config import ExecutionConfig, WebAnswersConfig
 from ..intent.parser import Intent
+from . import web_answers
 
 log = logging.getLogger(__name__)
 
 _RUN_COMMAND_TIMEOUT_SEC = 60
+
+# Spoken list prefixes for get_news ("1." reads badly aloud).
+_ORDINALS = ("First", "Second", "Third", "Fourth", "Fifth",
+             "Sixth", "Seventh", "Eighth", "Ninth", "Tenth")
 
 
 @dataclass(frozen=True)
@@ -59,13 +64,31 @@ def _resolve_path(raw: str) -> Path:
 class Executor:
     """Dispatches validated, authorized intents to action handlers."""
 
-    def __init__(self, cfg: ExecutionConfig) -> None:
+    def __init__(
+        self,
+        cfg: ExecutionConfig,
+        web: Optional[WebAnswersConfig] = None,
+        answerer: Optional[Callable[[str, Sequence[str]], Optional[str]]] = None,
+    ) -> None:
+        """Args:
+            cfg: Execution settings.
+            web: Live web-answer settings; ``None`` (or ``enabled: false``)
+                makes get_news / answer_question fall back to a browser search.
+            answerer: Composes a spoken answer from (question, snippets) —
+                the orchestrator wires this to ``IntentParser.answer`` so the
+                same local LLM is reused. ``None`` disables answer_question
+                the same way.
+        """
         self._cfg = cfg
+        self._web = web
+        self._answerer = answerer
         self._handlers: dict[str, Callable[[Mapping[str, str]], ExecutionResult]] = {
             "open_app": self._open_app,
             "close_app": self._close_app,
             "open_url": self._open_url,
             "web_search": self._web_search,
+            "get_news": self._get_news,
+            "answer_question": self._answer_question,
             "read_file": self._read_file,
             "list_folder": self._list_folder,
             "create_folder": self._create_folder,
@@ -155,6 +178,60 @@ class Executor:
         query = p["query"].strip()
         webbrowser.open(self._cfg.search_url.format(query=urllib.parse.quote_plus(query)))
         return ExecutionResult(True, f"Searching for {query}.")
+
+    # ------------------------------------------------------------------ #
+    # Live web answers  (non-destructive: network read-only)
+    # ------------------------------------------------------------------ #
+    def _browser_fallback(self, query: str, lead: str) -> ExecutionResult:
+        """Plan B for live answers: open a browser search, explain why aloud."""
+        webbrowser.open(self._cfg.search_url.format(query=urllib.parse.quote_plus(query)))
+        return ExecutionResult(True, f"{lead} I opened a web search for {query} instead.")
+
+    def _get_news(self, p: Mapping[str, str]) -> ExecutionResult:
+        """Speak the top news headlines. Non-destructive (network read-only)."""
+        topic = p.get("topic", "").strip()
+        search_query = f"{topic} news" if topic else "latest news"
+        if self._web is None or not self._web.enabled:
+            return self._browser_fallback(
+                search_query, "Live news is disabled in my configuration."
+            )
+        try:
+            headlines = web_answers.fetch_news(self._web, topic)
+        except web_answers.WebAnswerError:
+            log.exception("News fetch failed")
+            return self._browser_fallback(search_query, "I couldn't reach the news feed.")
+        if not headlines:
+            label = f"news about {topic}" if topic else "news"
+            return ExecutionResult(False, f"I couldn't find any {label} right now.")
+        parts = (
+            [f"Here are the top {len(headlines)} headlines."]
+            if len(headlines) > 1 else ["Here is the top headline."]
+        )
+        for i, headline in enumerate(headlines):
+            prefix = _ORDINALS[i] if i < len(_ORDINALS) else "Next"
+            source = f", from {headline.source}" if headline.source else ""
+            parts.append(f"{prefix}: {headline.title}{source}.")
+        return ExecutionResult(True, " ".join(parts))
+
+    def _answer_question(self, p: Mapping[str, str]) -> ExecutionResult:
+        """Answer a live question aloud: web snippets condensed by the LOCAL
+        LLM. Non-destructive (network read-only)."""
+        query = p["query"].strip()
+        if self._web is None or not self._web.enabled or self._answerer is None:
+            return self._browser_fallback(
+                query, "Live answers are disabled in my configuration."
+            )
+        try:
+            context = web_answers.fetch_qa_context(self._web, query)
+        except web_answers.WebAnswerError:
+            log.exception("Live lookup failed")
+            return self._browser_fallback(query, "I couldn't reach the web just now.")
+        if not context:
+            return self._browser_fallback(query, "I couldn't find anything useful.")
+        answer = self._answerer(query, context)
+        if not answer:
+            return self._browser_fallback(query, "I couldn't put together an answer.")
+        return ExecutionResult(True, answer)
 
     # ------------------------------------------------------------------ #
     # Files — non-destructive group (read-only / create-only / no-clobber)

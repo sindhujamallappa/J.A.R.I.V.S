@@ -130,5 +130,28 @@ def test_every_prompt_example_action_exists_in_catalog():
     from jarvis.intent.parser import _build_system_prompt
 
     prompt = _build_system_prompt()
-    for name in ("open_app", "delete_file", "web_search", "respond", "unknown"):
+    for name in ("open_app", "delete_file", "web_search", "get_news",
+                 "answer_question", "respond", "unknown"):
         assert name in ACTIONS and name in prompt
+
+
+# --------------------------------------------------------------------------- #
+# Spoken answers from web snippets (answer_question support)
+# --------------------------------------------------------------------------- #
+def test_answer_composes_from_snippets():
+    client = FakeClient("The next race is the British Grand Prix on July 5.")
+    parser = IntentParser(CFG, client=client)
+    answer = parser.answer("when is the next f1 race", ["F1 calendar: July 5 Silverstone"])
+    assert answer == "The next race is the British Grand Prix on July 5."
+    # Plain-text generation: JSON mode must NOT be requested.
+    assert "format" not in client.calls[0]
+    assert "July 5 Silverstone" in client.calls[0]["messages"][1]["content"]
+
+
+def test_answer_returns_none_on_backend_failure():
+    parser = _parser(exc=ConnectionError("refused"))
+    assert parser.answer("anything", ["snippet"]) is None
+
+
+def test_answer_returns_none_on_empty_output():
+    assert _parser("   ").answer("anything", ["snippet"]) is None

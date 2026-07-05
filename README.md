@@ -19,6 +19,10 @@
   Windows Task Scheduler integration, structured rotating logs, fully config-driven.
 - **Snappy on plain CPUs** — a regex fast path answers common commands without touching the LLM,
   the LLM's prompt cache is primed at startup, and every command logs per-stage timings.
+- **Spoken live answers** — "what's the latest news?" reads the top headlines aloud;
+  "when is the next Formula 1 race?" fetches search snippets and the **local** LLM speaks a
+  one-line answer. The lookup query is the only thing that ever goes online, and
+  `web_answers.enabled: false` turns it off entirely (falls back to a browser search).
 
 ## The pipeline
 
@@ -86,9 +90,14 @@ First start downloads the models once (openWakeWord ≈ 8 MB, Whisper `base` ≈
 offline. The HUD opens at **http://127.0.0.1:8765/** automatically; wait for the spoken
 *"Jarvis is online."*, then talk:
 
+Jarvis answers every wake word with a spoken **"Yes Boss"** (configurable via
+`wake_word.ack_phrase`), then listens.
+
 | Say | What happens |
 |---|---|
 | "Hey Jarvis … what time is it?" | speaks the time (instant fast path) |
+| "… what's the latest news?" / "any news about cricket?" | reads the top 3 headlines aloud |
+| "… when is the next Formula 1 race?" | speaks a one-line answer (web snippets + local LLM) |
 | "… open notepad" / "close notepad" | launches / gracefully closes the app |
 | "… search the web for llama 3" | opens your browser on the search |
 | "… set volume to 40" / "mute" / "lock my screen" | system controls |
@@ -146,7 +155,7 @@ src/jarvis/ui/static/index.html?demo=1&state=confirming   (the red safety scene)
 ## Development
 
 ```powershell
-.venv\Scripts\python -m pytest -q          # 110+ tests, no audio hardware needed
+.venv\Scripts\python -m pytest -q          # 150+ tests, no audio hardware needed
 ```
 
 ```text
@@ -160,7 +169,7 @@ src/jarvis/
 ├── stt/               utterance capture (RMS endpointing) + faster-whisper
 ├── intent/            regex fast path + Ollama LLM parser (catalog-validated)
 ├── safety/            spoken-confirmation gate (deny by default)
-├── execution/         the 23 cataloged actions (send2trash, pycaw, …)
+├── execution/         the 25 cataloged actions (send2trash, pycaw, live web answers, …)
 ├── tts/               Piper speaker (SAPI fallback)
 ├── ui/                event bus + SSE server + the HUD page
 └── utils/             audio I/O, logging setup
@@ -182,6 +191,11 @@ Microphone audio is processed in memory and never written to disk or network. Th
 `localhost` via Ollama. The HUD binds to `127.0.0.1` only. Model files download once from
 public repositories (openWakeWord, HuggingFace, Piper voices) on first run; after that the
 assistant runs with the network cable unplugged.
+
+One deliberate exception: when you ask a **live question** (news, schedules, current facts),
+that query — and nothing else — is fetched over HTTPS (Google News RSS for headlines; Bing or
+DuckDuckGo HTML for snippets, configurable) and summarized by the *local* LLM. Disable it with
+`web_answers.enabled: false` to stay 100% offline; those requests then just open a browser search.
 
 ## Roadmap
 

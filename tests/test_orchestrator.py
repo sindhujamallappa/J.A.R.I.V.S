@@ -176,6 +176,29 @@ def test_mic_flushed_before_capture():
     assert mic.flushes >= 1
 
 
+def test_wake_ack_spoken_before_command():
+    config = Config(
+        logging=LoggingConfig(), audio=AudioConfig(),
+        wake_word=WakeWordConfig(ack_phrase="Yes Boss"),
+        safety=SafetyConfig(), execution=ExecutionConfig(), stt=STTConfig(),
+        intent=IntentConfig(), tts=TTSConfig(), ui=UIConfig(enabled=False),
+        service=ServiceConfig(),
+    )
+    speaker = FakeSpeaker()
+    mic = FakeMic()
+    orch = Orchestrator(
+        config, speaker,
+        capturer=FakeCapturer(UTTERANCE),
+        transcriber=FakeTranscriber("open notepad"),
+        parser=FakeParser(Intent("open_app", {"name": "notepad"}, "open notepad")),
+        gate=FakeGate(GateResult(True, "non-destructive")),
+        executor=FakeExecutor(ExecutionResult(True, "Opening notepad.")),
+    )
+    orch._handle_command(mic)
+    assert speaker.spoken == ["Yes Boss", "Opening notepad."]
+    assert mic.flushes >= 2  # wake-phrase tail AND our own acknowledgment
+
+
 # --------------------------------------------------------------------------- #
 # Confirmation round trip (_ask_confirmation wired into a real gate)
 # --------------------------------------------------------------------------- #

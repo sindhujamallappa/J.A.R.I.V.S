@@ -56,6 +56,11 @@ def _search(m: re.Match, raw: str) -> Optional[Intent]:
     return Intent("web_search", {"query": m.group("query").strip()}, raw)
 
 
+def _news(m: re.Match, raw: str) -> Optional[Intent]:
+    topic = (m.group("topic") or "").strip()
+    return Intent("get_news", {"topic": topic} if topic else {}, raw)
+
+
 def _url(m: re.Match, raw: str) -> Optional[Intent]:
     return Intent("open_url", {"url": m.group("url").strip()}, raw)
 
@@ -70,6 +75,10 @@ _RULES: tuple[tuple[re.Pattern[str], Callable[[re.Match, str], Optional[Intent]]
     (re.compile(r"^(whats the time|what is the time|what time is it|tell me the time"
                 r"|whats todays date|what day is it|whats the date|what is the date)$"),
      _fixed("get_time")),
+    (re.compile(r"^(?:whats |what is |tell me |read me |give me |any )?(?:the )?"
+                r"(?:latest |todays |top )?news(?: (?:headlines|update|updates))?"
+                r"(?: (?:about|on|for) (?P<topic>.+))?$"),
+     _news),
     (re.compile(r"^lock(?: (?:the|my))? (?:screen|computer|pc|laptop|workstation)$"),
      _fixed("lock_screen")),
     (re.compile(r"^mute(?: (?:the|my))?(?: (?:audio|sound|volume|speakers))?$"),

@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol
+from typing import Any, Optional, Protocol, Sequence
 
 import ollama
 
@@ -55,7 +55,12 @@ Available actions (parameters ending in ? are optional):
 Rules:
 - Reply with ONLY a JSON object: {{"action": "<name>", "params": {{...}}}}
 - Pick exactly one action from the list. Never invent new actions or parameters.
-- For greetings, questions, or chit-chat use "respond"; params.text must be a complete spoken sentence.
+- get_news is for any request for news or headlines; put the subject, if given, in params.topic.
+- answer_question is for questions that need CURRENT or live information from the web:
+  sports schedules and results, weather, prices, releases, "when is", "who won", "what happened".
+- web_search is ONLY for when the user explicitly says to search, google, or look something up.
+- For greetings and chit-chat that need no fresh information use "respond"; params.text must be
+  a complete spoken sentence.
 - If the command cannot be mapped to any action, use "unknown" with a brief params.reason.
 - open_app / close_app are ONLY for software applications on this computer — never for
   physical objects, appliances, food, or anything not installable on a PC.
@@ -66,6 +71,9 @@ Examples:
 "Open Notepad, please." -> {{"action": "open_app", "params": {{"name": "notepad"}}}}
 "Delete the file report.txt from my desktop" -> {{"action": "delete_file", "params": {{"path": "Desktop/report.txt"}}}}
 "Search the web for tomorrow's weather" -> {{"action": "web_search", "params": {{"query": "tomorrow's weather"}}}}
+"Whats the latest news" -> {{"action": "get_news", "params": {{}}}}
+"Any news about cricket" -> {{"action": "get_news", "params": {{"topic": "cricket"}}}}
+"When is the next Formula 1 race" -> {{"action": "answer_question", "params": {{"query": "when is the next Formula 1 race"}}}}
 "Hey, how are you?" -> {{"action": "respond", "params": {{"text": "I am doing well and ready to help."}}}}
 "Make me a sandwich" -> {{"action": "unknown", "params": {{"reason": "no physical-world actions"}}}}"""
 
@@ -153,6 +161,55 @@ class IntentParser:
         intent = self._validate(content, text)
         log.info("Intent: %r -> %s %s", text, intent.action, intent.params)
         return intent
+
+    def answer(self, question: str, snippets: Sequence[str]) -> Optional[str]:
+        """Compose a short spoken answer to ``question`` from web ``snippets``.
+
+        Plain-text generation on the same local model (no JSON mode), reusing
+        its keep-alive so nothing cold-loads. Used by the executor's
+        answer_question action.
+
+        Args:
+            question: The user's spoken question.
+            snippets: Search-result snippets fetched for it.
+
+        Returns:
+            One or two spoken sentences, or ``None`` when the backend fails
+            or produces nothing — callers fall back gracefully.
+        """
+        import datetime as _dt
+
+        context = "\n".join(f"- {s}" for s in snippets)
+        # The model has no clock; "when is the NEXT ..." needs today's date.
+        today = _dt.datetime.now().strftime("%A, %B %d, %Y")
+        system = (
+            "You are the voice of a Windows voice assistant. Answer the user's "
+            "question in one or two short spoken sentences using ONLY the web "
+            "results provided. Plain text for the ear: no markdown, no lists, "
+            "no URLs. Include concrete dates, times, and numbers when the "
+            "results give them. If the results do not contain the answer, say "
+            "you could not find it."
+        )
+        try:
+            response = self._client.chat(
+                model=self._cfg.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",
+                     "content": (f"Today is {today}. Question: {question}\n\n"
+                                 f"Web results:\n{context}")},
+                ],
+                options={
+                    "temperature": self._cfg.temperature,
+                    "num_predict": self._cfg.max_tokens,
+                },
+                keep_alive=self._cfg.keep_alive,
+            )
+        except Exception as exc:  # noqa: BLE001 — a failed lookup must not crash the loop
+            log.warning("Answer generation failed: %s", exc)
+            return None
+        text = str(response["message"]["content"]).strip()
+        return text or None
 
     def _validate(self, content: str, raw_text: str) -> Intent:
         """Validate LLM output against the action catalog (fail-safe)."""

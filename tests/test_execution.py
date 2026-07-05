@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 import jarvis.execution.executor as executor_mod
-from jarvis.config import ExecutionConfig
+from jarvis.config import ExecutionConfig, WebAnswersConfig
 from jarvis.execution.executor import ExecutionResult, Executor, _resolve_path
+from jarvis.execution.web_answers import Headline, WebAnswerError
 from jarvis.intent.parser import Intent
 
 
@@ -136,6 +137,78 @@ def test_web_search_quotes_query(monkeypatch: pytest.MonkeyPatch):
     result = _run("web_search", query="hello world")
     assert result.ok
     assert opened == ["https://www.google.com/search?q=hello+world"]
+
+
+# --------------------------------------------------------------------------- #
+# Live web answers (network + LLM faked)
+# --------------------------------------------------------------------------- #
+def test_get_news_speaks_ordinal_headlines(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        executor_mod.web_answers, "fetch_news",
+        lambda cfg, topic="": [Headline("Rains hit the city", "The Hindu"),
+                               Headline("Markets rally", "")],
+    )
+    ex = Executor(ExecutionConfig(), web=WebAnswersConfig())
+    result = ex.execute(Intent("get_news", {}, "whats the news"))
+    assert result.ok
+    assert "First: Rains hit the city, from The Hindu." in result.message
+    assert "Second: Markets rally." in result.message
+
+
+def test_get_news_without_web_config_falls_back_to_browser(monkeypatch: pytest.MonkeyPatch):
+    opened: list[str] = []
+    monkeypatch.setattr(executor_mod.webbrowser, "open", opened.append)
+    result = Executor(ExecutionConfig()).execute(Intent("get_news", {}, "news"))
+    assert result.ok
+    assert opened and "news" in opened[0]
+
+
+def test_answer_question_speaks_llm_answer(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        executor_mod.web_answers, "fetch_qa_context",
+        lambda cfg, q: ["F1 calendar: next race July 5"],
+    )
+    ex = Executor(
+        ExecutionConfig(), web=WebAnswersConfig(),
+        answerer=lambda q, snippets: f"Answer for {q} from {len(snippets)} snippet.",
+    )
+    result = ex.execute(Intent("answer_question", {"query": "next f1 race"}, "q"))
+    assert result.ok
+    assert result.message == "Answer for next f1 race from 1 snippet."
+
+
+def test_answer_question_fetch_failure_opens_browser(monkeypatch: pytest.MonkeyPatch):
+    opened: list[str] = []
+    monkeypatch.setattr(executor_mod.webbrowser, "open", opened.append)
+
+    def boom(cfg, q):
+        raise WebAnswerError("down")
+
+    monkeypatch.setattr(executor_mod.web_answers, "fetch_qa_context", boom)
+    ex = Executor(ExecutionConfig(), web=WebAnswersConfig(), answerer=lambda q, s: "x")
+    result = ex.execute(Intent("answer_question", {"query": "abc"}, "q"))
+    assert result.ok  # plan B still did something useful
+    assert opened
+    assert "web search" in result.message
+
+
+def test_answer_question_no_context_opens_browser(monkeypatch: pytest.MonkeyPatch):
+    opened: list[str] = []
+    monkeypatch.setattr(executor_mod.webbrowser, "open", opened.append)
+    monkeypatch.setattr(executor_mod.web_answers, "fetch_qa_context", lambda cfg, q: [])
+    ex = Executor(ExecutionConfig(), web=WebAnswersConfig(), answerer=lambda q, s: "x")
+    result = ex.execute(Intent("answer_question", {"query": "abc"}, "q"))
+    assert result.ok
+    assert opened
+
+
+def test_answer_question_without_answerer_opens_browser(monkeypatch: pytest.MonkeyPatch):
+    opened: list[str] = []
+    monkeypatch.setattr(executor_mod.webbrowser, "open", opened.append)
+    ex = Executor(ExecutionConfig(), web=WebAnswersConfig(), answerer=None)
+    result = ex.execute(Intent("answer_question", {"query": "abc"}, "q"))
+    assert result.ok
+    assert opened
 
 
 # --------------------------------------------------------------------------- #

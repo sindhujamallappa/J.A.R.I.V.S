@@ -22,6 +22,10 @@ from jarvis.intent.parser import IntentParser
     ("set volume to 40 percent", "set_volume", {"level": "40"}),
     ("Volume 75", "set_volume", {"level": "75"}),
     ("search for weather in Bangalore", "web_search", {"query": "weather in bangalore"}),
+    ("What's the latest news?", "get_news", {}),
+    ("tell me the news", "get_news", {}),
+    ("any news about cricket", "get_news", {"topic": "cricket"}),
+    ("top news on formula 1", "get_news", {"topic": "formula 1"}),
     ("google llama 3", "web_search", {"query": "llama 3"}),
     ("open github.com", "open_url", {"url": "github.com"}),
     ("Open Notepad", "open_app", {"name": "notepad"}),
@@ -46,6 +50,8 @@ def test_fast_path_matches(text: str, action: str, params: dict[str, str]):
     "open my documents folder",              # folder, not an app
     "make me a coffee",                      # nonsense
     "hey how are you doing",                 # chit-chat
+    "when is the next formula 1 race",       # live question — LLM routes to answer_question
+    "read me a newspaper article",           # not a news-headlines request
     "search",                                # no query
     "volume up a bit",                       # no number
     "",                                      # empty

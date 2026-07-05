@@ -59,6 +59,9 @@ class WakeWordConfig:
     enable_noise_suppression: bool = False
     trigger_cooldown_sec: float = 2.0
     models_dir: str = "models"
+    # Spoken via TTS the moment a wake word fires, before listening for the
+    # command (e.g. "Yes Boss"). Empty -> just the earcon beep.
+    ack_phrase: str = ""
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,33 @@ class ExecutionConfig:
     delete_to_trash: bool = True
     search_url: str = "https://www.google.com/search?q={query}"
     read_file_max_chars: int = 2000
+
+
+@dataclass(frozen=True)
+class WebAnswersConfig:
+    """Spoken answers for live questions (news, schedules, current facts).
+
+    The ONE deliberate exception to fully-offline operation: when the user
+    asks a live question, that query — and nothing else — is fetched over
+    HTTPS from the endpoints below, then summarized by the LOCAL LLM.
+    ``enabled: false`` keeps the assistant 100% offline (such requests fall
+    back to opening a browser search).
+    """
+
+    enabled: bool = True
+    timeout_sec: float = 8.0        # per HTTP request
+    max_headlines: int = 3          # headlines read aloud by get_news
+    max_snippets: int = 6           # search snippets fed to the LLM
+    # Google News RSS; change hl/gl/ceid for another locale (e.g. en-US/US/US:en).
+    news_url: str = "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
+    news_search_url: str = (
+        "https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+    )
+    # Search endpoint for answer_question. Bing's static page and DuckDuckGo's
+    # HTML endpoint (https://html.duckduckgo.com/html/?q={query}) are both
+    # supported (markup auto-detected); Bing is the default because corporate
+    # networks commonly block DuckDuckGo.
+    snippets_url: str = "https://www.bing.com/search?q={query}"
 
 
 @dataclass(frozen=True)
@@ -169,6 +199,8 @@ class Config:
     tts: TTSConfig
     ui: UIConfig
     service: ServiceConfig
+    # Defaulted so existing Config(...) call sites keep working.
+    web_answers: WebAnswersConfig = field(default_factory=WebAnswersConfig)
 
 
 # --------------------------------------------------------------------------- #
@@ -289,6 +321,9 @@ def load_config(path: str | os.PathLike[str] = "config/config.yaml") -> Config:
         tts=_construct(TTSConfig, _section(raw, "tts"), "tts", strict=True),
         ui=_construct(UIConfig, _section(raw, "ui"), "ui", strict=True),
         service=_construct(ServiceConfig, _section(raw, "service"), "service", strict=True),
+        web_answers=_construct(
+            WebAnswersConfig, _section(raw, "web_answers"), "web_answers", strict=True
+        ),
     )
     _validate(cfg)
     return cfg
@@ -392,6 +427,20 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("ui.host must not be empty")
     if not 1 <= ui.port <= 65535:
         raise ConfigError("ui.port must be in [1, 65535]")
+
+    wa = cfg.web_answers
+    if wa.timeout_sec <= 0:
+        raise ConfigError("web_answers.timeout_sec must be > 0")
+    if not 1 <= wa.max_headlines <= 10:
+        raise ConfigError("web_answers.max_headlines must be in [1, 10]")
+    if not 1 <= wa.max_snippets <= 10:
+        raise ConfigError("web_answers.max_snippets must be in [1, 10]")
+    if not wa.news_url.strip():
+        raise ConfigError("web_answers.news_url must not be empty")
+    if "{query}" not in wa.news_search_url:
+        raise ConfigError("web_answers.news_search_url must contain the '{query}' placeholder")
+    if "{query}" not in wa.snippets_url:
+        raise ConfigError("web_answers.snippets_url must contain the '{query}' placeholder")
 
     svc = cfg.service
     if not svc.task_name.strip():

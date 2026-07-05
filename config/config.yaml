@@ -32,6 +32,7 @@ wake_word:
   enable_noise_suppression: false  # speex; needs the speexdsp-ns extra (awkward on Windows)
   trigger_cooldown_sec: 2.0      # ignore re-triggers within this window after a detection
   models_dir: "models"           # where downloaded/custom wake-word models live
+  ack_phrase: "Yes Boss"         # spoken on wake before listening; "" = just the beep
 
 safety:
   confirm_unknown_actions: true    # treat unrecognised actions as needing confirmation (fail-safe)
@@ -47,6 +48,24 @@ execution:
   delete_to_trash: true            # delete_file -> Recycle Bin instead of permanent removal
   search_url: "https://www.google.com/search?q={query}"
   read_file_max_chars: 2000        # cap on read_file spoken/returned output
+
+web_answers:
+  # Spoken answers for live questions ("latest news", "when is the next F1 race").
+  # PRIVACY NOTE: the ONE deliberate exception to fully-offline operation — when
+  # you ask a live question, that query (and nothing else) goes over HTTPS to the
+  # endpoints below; the summary is composed by the LOCAL LLM. Set enabled: false
+  # to stay 100% offline (JARVIS then falls back to opening a browser search).
+  enabled: true
+  timeout_sec: 8                 # per HTTP request
+  max_headlines: 3               # headlines read aloud by get_news
+  max_snippets: 6                # search snippets fed to the local LLM
+  # Google News RSS — change hl/gl/ceid for another locale (e.g. en-US/US/US:en)
+  news_url: "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
+  news_search_url: "https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+  # Search endpoint for answer_question — no API key needed. Bing and
+  # DuckDuckGo HTML ("https://html.duckduckgo.com/html/?q={query}") both work
+  # (markup auto-detected); Bing default because corporate networks often block DDG.
+  snippets_url: "https://www.bing.com/search?q={query}"
 
 # --- stages below are scaffolded now, wired in later roadmap steps ---
 

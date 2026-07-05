@@ -54,7 +54,13 @@ class Orchestrator:
         self._capturer = capturer or UtteranceCapturer(config.stt, config.audio)
         self._transcriber = transcriber or Transcriber(config.stt)
         self._parser = parser or IntentParser(config.intent)
-        self._executor = executor or Executor(config.execution)
+        # Live web answers reuse the parser's LLM client; getattr keeps fake
+        # parsers without .answer working in tests.
+        self._executor = executor or Executor(
+            config.execution,
+            web=config.web_answers,
+            answerer=getattr(self._parser, "answer", None),
+        )
         self._gate = gate or ConfirmationGate(config.safety, ask=self._ask_confirmation)
         self._mic: Optional[MicrophoneStream] = None
 
@@ -107,6 +113,10 @@ class Orchestrator:
 
         try:
             mic.flush()  # drop the tail of the wake phrase
+            ack = self._config.wake_word.ack_phrase
+            if ack:
+                _timed("ack", lambda: self._say(ack))
+                mic.flush()  # never capture our own acknowledgment
             BUS.publish("state", state="listening")
             self._beep()
 

@@ -51,6 +51,10 @@ _SPECS: tuple[ActionSpec, ...] = (
                "Open a URL in the default browser"),
     ActionSpec("web_search", ("query",), (), False,
                "Search the web in the default browser"),
+    ActionSpec("get_news", (), ("topic",), False,
+               "Read the top news headlines aloud, optionally about a topic"),
+    ActionSpec("answer_question", ("query",), (), False,
+               "Answer a question needing current/live information, spoken aloud"),
     # --- files (read-only / no-clobber are non-destructive) ---
     ActionSpec("read_file", ("path",), (), False,
                "Read a text file's contents aloud"),
