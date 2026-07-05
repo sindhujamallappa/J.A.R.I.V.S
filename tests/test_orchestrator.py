@@ -176,6 +176,23 @@ def test_mic_flushed_before_capture():
     assert mic.flushes >= 1
 
 
+def test_slow_action_speaks_progress_line_before_result():
+    from jarvis.actions import ACTIONS
+
+    executor = FakeExecutor(ExecutionResult(True, "The race is on Sunday."))
+    orch, speaker = _orchestrator(
+        transcriber=FakeTranscriber("when is the next f1 race"),
+        parser=FakeParser(Intent("answer_question", {"query": "next f1 race"},
+                                 "when is the next f1 race")),
+        executor=executor,
+    )
+    orch._handle_command(FakeMic())
+    expected_fillers = {t.format(query="next f1 race")
+                        for t in ACTIONS["answer_question"].progress}
+    assert speaker.spoken[0] in expected_fillers   # filler joined before result
+    assert speaker.spoken[1] == "The race is on Sunday."
+
+
 def test_wake_ack_spoken_before_command():
     config = Config(
         logging=LoggingConfig(), audio=AudioConfig(),

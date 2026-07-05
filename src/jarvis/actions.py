@@ -13,7 +13,8 @@ declares are enforced by the safety gate in the execution path.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import random
+from dataclasses import dataclass, field
 from typing import Iterable, Mapping
 
 
@@ -38,6 +39,9 @@ class ActionSpec:
     # Spoken-summary template for confirmation prompts, e.g.
     # "delete the file {path}". Empty -> a generic summary is derived.
     summary: str = ""
+    # Progress phrases spoken WHILE a slow action runs (one is picked at
+    # random), templated with the intent params. Empty -> silent execution.
+    progress: tuple[str, ...] = field(default=())
 
 
 _SPECS: tuple[ActionSpec, ...] = (
@@ -52,9 +56,19 @@ _SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("web_search", ("query",), (), False,
                "Search the web in the default browser"),
     ActionSpec("get_news", (), ("topic",), False,
-               "Read the top news headlines aloud, optionally about a topic"),
+               "Read the top news headlines aloud, optionally about a topic",
+               progress=(
+                   "Pulling up the latest headlines for you.",
+                   "Let me see what is happening in the world.",
+                   "Fetching the news. One moment.",
+               )),
     ActionSpec("answer_question", ("query",), (), False,
-               "Answer a question needing current/live information, spoken aloud"),
+               "Answer a question needing current/live information, spoken aloud",
+               progress=(
+                   "Let me look that up. Checking the web for {query}.",
+                   "Pulling up information on {query}. One moment.",
+                   "Give me a second. Searching for {query}.",
+               )),
     # --- files (read-only / no-clobber are non-destructive) ---
     ActionSpec("read_file", ("path",), (), False,
                "Read a text file's contents aloud"),
@@ -137,6 +151,22 @@ def describe(action: str, params: Mapping[str, str]) -> str:
     if params:
         readable += ": " + ", ".join(f"{k} {v}" for k, v in params.items())
     return readable
+
+
+def progress_phrase(action: str, params: Mapping[str, str]) -> str:
+    """A spoken 'working on it' line for slow actions, or "" for silent ones.
+
+    Picks one of the spec's progress templates at random (so repeated
+    commands don't sound canned) and fills it with the intent params.
+    Never raises on a bad template — returns "" instead.
+    """
+    spec = ACTIONS.get(action)
+    if spec is None or not spec.progress:
+        return ""
+    try:
+        return random.choice(spec.progress).format(**params)
+    except (KeyError, IndexError):
+        return ""
 
 
 def catalog_lines() -> list[str]:

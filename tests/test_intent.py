@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from jarvis.actions import ACTIONS, is_destructive
+from jarvis.actions import ACTIONS, is_destructive, progress_phrase
 from jarvis.config import IntentConfig
 from jarvis.intent.parser import IntentError, IntentParser
 
@@ -59,6 +59,20 @@ def test_unrecognised_action_is_destructive_by_default():
 def test_extra_destructive_actions_override():
     assert not is_destructive("close_app")
     assert is_destructive("close_app", extra_destructive=("close_app",))
+
+
+def test_progress_phrase_fills_template():
+    phrase = progress_phrase("answer_question", {"query": "next f1 race"})
+    expected = {t.format(query="next f1 race")
+                for t in ACTIONS["answer_question"].progress}
+    assert phrase in expected
+
+
+def test_progress_phrase_empty_for_fast_or_unknown_actions():
+    assert progress_phrase("open_app", {"name": "notepad"}) == ""
+    assert progress_phrase("warp_drive", {}) == ""
+    # A missing template param must yield silence, never a crash.
+    assert progress_phrase("answer_question", {}) == ""
 
 
 # --------------------------------------------------------------------------- #

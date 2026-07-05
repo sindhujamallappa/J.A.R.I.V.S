@@ -15,10 +15,11 @@ those live in the gated executor.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Optional
 
 from . import __version__
-from .actions import is_destructive
+from .actions import is_destructive, progress_phrase
 from .config import Config
 from .execution.executor import Executor
 from .intent.parser import IntentError, IntentParser
@@ -160,7 +161,20 @@ class Orchestrator:
                 return
 
             BUS.publish("state", state="executing")
+            # Slow actions (live web answers) take seconds; fill the gap with
+            # a spoken "working on it" line IN PARALLEL with the execution,
+            # movie style. Joined before the result so we never talk over
+            # ourselves.
+            filler = progress_phrase(intent.action, intent.params)
+            filler_thread: Optional[threading.Thread] = None
+            if filler:
+                filler_thread = threading.Thread(
+                    target=self._say_progress, args=(filler,), daemon=True
+                )
+                filler_thread.start()
             result = _timed("exec", lambda: self._executor.execute(intent))
+            if filler_thread is not None:
+                filler_thread.join()
             BUS.publish("result", ok=result.ok, message=result.message)
             _timed("speak", lambda: self._say(result.message))
         finally:
@@ -199,6 +213,19 @@ class Orchestrator:
         BUS.publish("transcript", who="jarvis", text=text)
         BUS.publish("state", state="speaking")
         self._speaker.speak(text)
+
+    def _say_progress(self, text: str) -> None:
+        """Speak a progress line from a worker thread while execution runs.
+
+        Deliberately does NOT publish a state change (the HUD stays on
+        'executing') and must never raise — a lost filler phrase is fine,
+        a crashed thread is not.
+        """
+        BUS.publish("transcript", who="jarvis", text=text)
+        try:
+            self._speaker.speak(text)
+        except Exception:  # noqa: BLE001
+            log.warning("Progress speech failed", exc_info=True)
 
     def _beep(self) -> None:
         """Play the listening cue; never let audio-out kill the loop."""
